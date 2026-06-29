@@ -98,6 +98,7 @@ class BeyondMimicAdaptiveWeighting(ManagerTermBase):
             ],
             device=self.device,
         )
+        wp.synchronize_device(self.device)
 
         repeat_sums = torch.repeat_interleave(motion_sums, self.motion_bin_nums)
         new_prob_concat /= repeat_sums.clamp(min=1e-10)  # Avoid division by zero
@@ -186,6 +187,7 @@ class BeyondMimicAdaptiveWeighting(ManagerTermBase):
             ],
             device=self.device,
         )
+        wp.synchronize_device(self.device)
 
         return new_prob_concat
 

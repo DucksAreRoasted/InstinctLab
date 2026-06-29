@@ -95,6 +95,7 @@ def sample_start_times(
         ],
         device=buffer_device,
     )
+    wp.synchronize_device(buffer_device)
 
     return temp_starts
 
@@ -203,6 +204,8 @@ class AmassMotion(MotionBuffer):
             self._motion_buffer_start_time_s[assigned_ids]
             * self._all_motion_sequences.framerate[self._assigned_env_motion_selection[assigned_ids]]
         ).to(torch.long)
+        max_frames = self._all_motion_sequences.buffer_length[self._assigned_env_motion_selection[assigned_ids]] - 1
+        frame_selection = torch.clamp(frame_selection, torch.zeros_like(max_frames), max_frames)
 
         base_pos_w = self._all_motion_sequences.base_pos_w[
             self._assigned_env_motion_selection[assigned_ids], frame_selection
@@ -477,9 +480,12 @@ class AmassMotion(MotionBuffer):
 
     def _init_motion_bin_weights(self) -> None:
         print("Initializing motion bin weights motion_start_from_middle_range is disabled.")
-        num_motion_bins = torch.floor(
-            (self._all_motion_sequences.buffer_length / self._all_motion_sequences.framerate).to(self.buffer_device)
-            / self.cfg.motion_bin_length_s
+        num_motion_bins = torch.clamp(
+            torch.floor(
+                (self._all_motion_sequences.buffer_length / self._all_motion_sequences.framerate).to(self.buffer_device)
+                / self.cfg.motion_bin_length_s
+            ),
+            min=1,
         ).to(torch.long)
         self._motion_bin_weights = ConcatBatchTensor(
             batch_sizes=num_motion_bins,  # type: ignore
