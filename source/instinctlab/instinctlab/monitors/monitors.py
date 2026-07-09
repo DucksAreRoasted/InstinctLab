@@ -1045,3 +1045,24 @@ class ShadowingGravityMonitorTerm(MonitorTerm):
                 "pg_dist_currently": self._pg_diff_currently.nanmean().item(),
                 "pg_dist_max": self._pg_diff_max.max().item(),
             }
+
+
+class BaseQuaternionMonitorTerm(MonitorTerm):
+    """Logs the robot's base quaternion (w, x, y, z) mean across environments."""
+
+    def __init__(self, cfg: MonitorTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        if "robot_cfg" not in self.cfg.params:
+            self.cfg.params["robot_cfg"] = SceneEntityCfg("robot")
+
+    def get_log(self, is_episode=False) -> dict[str, float | torch.Tensor]:
+        if is_episode:
+            return {}
+        asset: Articulation = self._env.scene[self.cfg.params["robot_cfg"].name]
+        quat = asset.data.root_quat_w
+        return {
+            "w": quat[:, 0].mean().item(),
+            "x": quat[:, 1].mean().item(),
+            "y": quat[:, 2].mean().item(),
+            "z": quat[:, 3].mean().item(),
+        }
