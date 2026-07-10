@@ -69,6 +69,7 @@ from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
 
 # Import extensions to set up environment tasks
 import instinctlab.tasks  # noqa: F401
+from instinct_rl.utils.loggings import pack_checkpoint_folder
 from instinctlab.managers.reward_manager import MultiRewardManager
 from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
 from instinctlab.utils.wrappers.instinct_rl import InstinctRlOnPolicyRunnerCfg
@@ -172,6 +173,13 @@ def main():
     if agent_cfg.load_run is not None:
         export_model_dir = os.path.join(log_dir, "exported")
         if args_cli.exportonnx:
+            log_dir = pack_checkpoint_folder(
+                log_dir,
+                resume_path,
+                ppo_runner.current_learning_iteration,
+                additional_file_regex=[r"^driver_info\.txt$"],
+            )
+            export_model_dir = os.path.join(log_dir, "exported")
             assert env.unwrapped.num_envs == 1, "Exporting to ONNX is only supported for single environment."
             if not os.path.exists(export_model_dir):
                 os.makedirs(export_model_dir)
