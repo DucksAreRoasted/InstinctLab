@@ -128,6 +128,14 @@ gym.register(
 
 ## Troubleshooting
 
+### Missing `libGL.so.1` on headless servers
+
+When running on a headless server (e.g., cloud VMs without a display), Isaac Sim requires OpenGL system libraries even in headless mode. Install them with:
+
+```bash
+apt install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+```
+
 ### Pylance Missing Indexing of Extensions
 
 In some VsCode versions, the indexing of part of the extensions is missing. In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
