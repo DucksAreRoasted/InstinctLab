@@ -116,8 +116,12 @@ class JointStatMonitorTerm(MonitorTerm):
 
     def update(self, dt: float):
         asset = self._env.scene[self.cfg.params["asset_cfg"].name]
-        self._computed_torque_max[:] = (
-            torch.abs(asset.data.computed_torque[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values
+        # NOTE: the *_max buffers accumulate a running maximum within each episode (zeroed in
+        # reset_idx). Do not overwrite them with the per-step value, otherwise transient spikes
+        # that settle before the last step of a logging interval become invisible in the logs.
+        self._computed_torque_max[:] = torch.maximum(
+            self._computed_torque_max,
+            torch.abs(asset.data.computed_torque[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
         )
         self._joint_acc[:] = (
             torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel).mean(
@@ -125,15 +129,17 @@ class JointStatMonitorTerm(MonitorTerm):
             )
             / dt
         )
-        self._joint_acc_max[:] = (
+        self._joint_acc_max[:] = torch.maximum(
+            self._joint_acc_max,
             torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel)
             .max(dim=-1)
             .values
-            / dt
+            / dt,
         )
         self._joint_vel[:] = torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids]).mean(dim=-1)
-        self._joint_vel_max[:] = (
-            torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values
+        self._joint_vel_max[:] = torch.maximum(
+            self._joint_vel_max,
+            torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
         )
         self._joint_pos[:] = torch.abs(
             asset.data.joint_pos[:, self.cfg.params["asset_cfg"].joint_ids]
@@ -144,10 +150,12 @@ class JointStatMonitorTerm(MonitorTerm):
         )
         action_diff = torch.abs(self._env.action_manager.action - self._env.action_manager.prev_action)
         try:
-            self._action_rate_max[:] = action_diff[:, self.cfg.params["asset_cfg"].joint_ids].max(dim=-1).values
+            self._action_rate_max[:] = torch.maximum(
+                self._action_rate_max, action_diff[:, self.cfg.params["asset_cfg"].joint_ids].max(dim=-1).values
+            )
         except IndexError:
             # If the action is not a joint action, we just count all actions
-            self._action_rate_max[:] = action_diff.max(dim=-1).values
+            self._action_rate_max[:] = torch.maximum(self._action_rate_max, action_diff.max(dim=-1).values)
 
         self._last_joint_vel = asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids].detach().clone()
 
@@ -310,17 +318,19 @@ class BodyStatMonitorTerm(MonitorTerm):
             ).mean(dim=-1)
             / dt
         )
-        self._body_acc_max[:] = (
+        self._body_acc_max[:] = torch.maximum(
+            self._body_acc_max,
             torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids] - self._last_body_vel, dim=-1)
             .max(dim=-1)
             .values
-            / dt
+            / dt,
         )
         self._body_vel[:] = torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids], dim=-1).mean(
             dim=-1
         )
-        self._body_vel_max[:] = (
-            torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids], dim=-1).max(dim=-1).values
+        self._body_vel_max[:] = torch.maximum(
+            self._body_vel_max,
+            torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids], dim=-1).max(dim=-1).values,
         )
 
         self._last_body_vel = asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids].detach().clone()
