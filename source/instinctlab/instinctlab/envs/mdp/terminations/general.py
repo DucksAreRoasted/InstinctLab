@@ -19,6 +19,7 @@ def dataset_exhausted(
     env: ManagerBasedRLEnv,
     reference_cfg: SceneEntityCfg = SceneEntityCfg("motion_reference"),
     reset_without_notice: bool = False,
+    check_all_frames: bool = False,
     print_reason: bool = False,
 ) -> torch.Tensor:
     """Check if the dataset is exhausted.
@@ -26,13 +27,21 @@ def dataset_exhausted(
     Args:
         env: The environment object.
         reset_without_notice: whether to reset the environment without returning True.
+        check_all_frames: If True, an environment is marked exhausted when *any* frame in its
+            reference data is invalid/out of bounds. If False (default), only the current
+            aiming frame is checked.
     Returns:
         True if the dataset is exhausted, False otherwise.
     """
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
-    return_ = torch.logical_not(
-        motion_reference.data.validity[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
-    )  # shape: [N,]
+    if check_all_frames:
+        return_ = torch.logical_not(
+            motion_reference.data.validity[motion_reference.ALL_INDICES]
+        ).any(dim=-1)  # shape: [N,]
+    else:
+        return_ = torch.logical_not(
+            motion_reference.data.validity[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
+        )  # shape: [N,]
     if print_reason and return_.any():
         print("dataset_exhausted: ", return_.sum())
     if reset_without_notice:
