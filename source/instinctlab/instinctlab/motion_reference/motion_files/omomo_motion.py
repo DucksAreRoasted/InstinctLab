@@ -46,14 +46,15 @@ class OmomoMotion(AmassMotion):
         )
         joint_pos = torch.as_tensor(raw_data["joint_pos"], device=self.buffer_device, dtype=torch.float)
         root_trans = torch.as_tensor(raw_data["base_pos_w"], device=self.buffer_device, dtype=torch.float)
-        root_quat = torch.as_tensor(raw_data["base_quat_w"], device=self.buffer_device, dtype=torch.float)
+        root_quat_wxyz = torch.as_tensor(raw_data["base_quat_w"], device=self.buffer_device, dtype=torch.float)
+        root_quat = math_utils.convert_quat(root_quat_wxyz, to="xyzw")
 
         # Retargeting joints
         retargetted_joints_to_output_joints_ids = [joint_names.index(j_name) for j_name in self.isaac_joint_names]
         joint_pos = joint_pos[:, retargetted_joints_to_output_joints_ids]
 
         # --- Object Data Processing ---
-        # Retargeted files always contain object_pos_w (T, 3) and object_quat_w (T, 4) wxyz.
+        # Retargeted NPZ files store object_quat_w as WXYZ. Convert at this file boundary.
         # Extract object name from filename: subXX_OBJECTNAME_XXX_retargeted.npz
         filename = os.path.basename(filepath)
         parts = filename.split("_")
@@ -65,9 +66,8 @@ class OmomoMotion(AmassMotion):
             raw_data["object_pos_w"], device=self.buffer_device, dtype=torch.float
         ).unsqueeze(1)
         # (T, 4) -> (T, 1, 4)
-        object_quat_w = torch.as_tensor(
-            raw_data["object_quat_w"], device=self.buffer_device, dtype=torch.float
-        ).unsqueeze(1)
+        object_quat_wxyz = torch.as_tensor(raw_data["object_quat_w"], device=self.buffer_device, dtype=torch.float)
+        object_quat_w = math_utils.convert_quat(object_quat_wxyz, to="xyzw").unsqueeze(1)
 
         object_validity = torch.ones((object_pos_w.shape[0], 1), device=self.buffer_device, dtype=torch.bool)
 
@@ -259,7 +259,7 @@ class OmomoMotion(AmassMotion):
                                 dtype=data.dtype,
                             )
                             if "quat" in attr:
-                                padding[..., 0] = 1.0  # Identity quaternion
+                                padding[..., 3] = 1.0
                         data = torch.cat([data, padding], dim=1)
 
                 getattr(self._all_motion_sequences, attr)[i, : motion.buffer_length] = data
@@ -305,7 +305,7 @@ class OmomoMotion(AmassMotion):
         # Reset all object slots for these envs
         state_buffer.object_pos_w[env_ids] = 0.0
         state_buffer.object_quat_w[env_ids] = 0.0
-        state_buffer.object_quat_w[env_ids, :, 0] = 1.0
+        state_buffer.object_quat_w[env_ids, :, 3] = 1.0
         state_buffer.object_lin_vel_w[env_ids] = 0.0
         state_buffer.object_ang_vel_w[env_ids] = 0.0
         state_buffer.object_validity[env_ids] = False

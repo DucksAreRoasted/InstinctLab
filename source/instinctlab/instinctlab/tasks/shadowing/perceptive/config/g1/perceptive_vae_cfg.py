@@ -13,26 +13,30 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroupCfg
 from isaaclab.managers import ObservationTermCfg as ObsTermCfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTermCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.noise import UniformNoiseCfg
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.mdp as shadowing_mdp
 import instinctlab.tasks.shadowing.perceptive.perceptive_env_cfg as perceptual_cfg
 from instinctlab.assets.unitree_g1 import (
+    G1_29DOF_LINKS,
     G1_29DOF_TORSOBASE_POPSICLE_CFG,
     G1_29Dof_TorsoBase_symmetric_augmentation_joint_mapping,
     G1_29Dof_TorsoBase_symmetric_augmentation_joint_reverse_buf,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     beyondmimic_g1_29dof_delayed_actuators,
+    configure_g1_29dof_policy_io,
 )
-from instinctlab.monitors import ActuatorMonitorTerm, MonitorTermCfg, ShadowingBasePosMonitorTerm
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.aistpp_motion_cfg import AistppMotionCfg as AistppMotionCfgBase
 from instinctlab.motion_reference.motion_files.amass_motion_cfg import AmassMotionCfg as AmassMotionCfgBase
 from instinctlab.motion_reference.motion_files.terrain_motion_cfg import TerrainMotionCfg as TerrainMotionCfgBase
 from instinctlab.motion_reference.utils import motion_interpolate_bilinear
+from instinctlab.sensors import get_link_prim_targets
+from instinctlab.utils.urdf import urdf_importer_link_prim_path
 
 G1_CFG = G1_29DOF_TORSOBASE_POPSICLE_CFG
 PROPRIO_HISTORY_LENGTH = 8
@@ -60,9 +64,9 @@ class TerrainMotionCfg(TerrainMotionCfgBase):
 
 
 motion_reference_cfg = MotionReferenceManagerCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    robot_model_path=G1_CFG.spawn.asset_path,
-    reference_prim_path="/World/envs/env_.*/RobotReference/torso_link",
+    prim_path="{ENV_REGEX_NS}/Robot",
+    robot_model_path=G1_CFG.spawn.source_urdf_path,
+    reference_prim_path="/World/envs/env_.*/RobotReference",
     link_of_interests=[
         "pelvis",
         "torso_link",
@@ -207,8 +211,11 @@ class G1PerceptiveVaeEnvCfg(perceptual_cfg.PerceptiveShadowingEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        configure_g1_29dof_policy_io(self)
 
         self.scene.height_scanner = None
+        self.scene.camera.prim_path = urdf_importer_link_prim_path(G1_CFG.spawn.source_urdf_path, "torso_link")
+        self.scene.camera.mesh_prim_paths.extend(get_link_prim_targets(G1_29DOF_LINKS, G1_CFG.spawn.source_urdf_path))
 
         self.scene.camera.data_histories["distance_to_image_plane_noised"] = 10
         self.observations.policy.depth_image.params["history_skip_frames"] = 3
@@ -238,8 +245,8 @@ class G1PerceptiveVaeEnvCfg_PLAY(G1PerceptiveVaeEnvCfg):
     )
 
     viewer: ViewerCfg = ViewerCfg(
-        eye=[0.0, 2.0, 2.5],
-        lookat=[0.0, 0.0, 0.0],
+        eye=(0.0, 2.0, 2.5),
+        lookat=(0.0, 0.0, 0.0),
         origin_type="asset_root",
         asset_name="robot",
     )
@@ -320,32 +327,32 @@ class G1PerceptiveVaeEnvCfg_PLAY(G1PerceptiveVaeEnvCfg):
 
         # add some additional monitor terms
         self.monitors.shadowing_position_stats = MonitorTermCfg(
-            func=ShadowingBasePosMonitorTerm,
+            func="instinctlab.monitors.monitors:ShadowingBasePosMonitorTerm",
             params=dict(
                 robot_cfg=SceneEntityCfg("robot"),
                 motion_reference_cfg=SceneEntityCfg("motion_reference"),
             ),
         )
         self.monitors.right_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_ankle_pitch.*"),
             ),
         )
         self.monitors.left_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_ankle_pitch.*"),
             ),
         )
         self.monitors.right_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_knee.*"),
             ),
         )
         self.monitors.left_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_knee.*"),
             ),

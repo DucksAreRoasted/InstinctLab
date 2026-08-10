@@ -1,2 +1,3 @@
-from .manager_based_rl_env import InstinctRlEnv
 from .manager_based_rl_env_cfg import InstinctLabRLEnvCfg
+
+__all__ = ["InstinctLabRLEnvCfg"]

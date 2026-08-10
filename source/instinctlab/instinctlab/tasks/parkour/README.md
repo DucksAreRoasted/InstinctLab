@@ -10,7 +10,7 @@
 
 2. Train the policy:
 ```bash
-python scripts/instinct_rl/train.py --headless --task=Instinct-Parkour-Target-Amp-G1-v0
+python scripts/instinct_rl/train.py --viz none --task=Instinct-Parkour-Target-Amp-G1-v0
 ```
 
 3. Play trained policy (load_run must be provided, absolute path is recommended, or use `--no_resume` to visualize untrained policy):

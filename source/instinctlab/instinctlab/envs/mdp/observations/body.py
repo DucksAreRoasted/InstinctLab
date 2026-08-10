@@ -26,10 +26,10 @@ class base_pos_offset_since_motion_refresh(ManagerTermBase):
         asset_cfg = cfg.params.get("asset_cfg", SceneEntityCfg("robot"))
         self.asset = env.scene[asset_cfg.name]
 
-        self.base_pos_marker = torch.zeros_like(self.asset.data.root_pos_w)  # (num_envs, 3)
+        self.base_pos_marker = torch.zeros_like(self.asset.data.root_pos_w.torch)  # (num_envs, 3)
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
-        self.base_pos_marker[env_ids] = self.asset.data.root_pos_w[env_ids]
+        self.base_pos_marker[env_ids] = self.asset.data.root_pos_w.torch[env_ids]
 
     def __call__(
         self,
@@ -39,9 +39,9 @@ class base_pos_offset_since_motion_refresh(ManagerTermBase):
     ) -> torch.Tensor:
         landmarker_refresh_mask = self.motion_reference.time_passed_from_update < env.step_dt
         # (num_envs, 3)
-        self.base_pos_marker[landmarker_refresh_mask] = self.asset.data.root_pos_w[landmarker_refresh_mask]
+        self.base_pos_marker[landmarker_refresh_mask] = self.asset.data.root_pos_w.torch[landmarker_refresh_mask]
         # (num_envs, 3)
-        base_pos_offset = self.asset.data.root_pos_w - self.base_pos_marker
+        base_pos_offset = self.asset.data.root_pos_w.torch - self.base_pos_marker
         return base_pos_offset  # (num_envs, 3)
 
 
@@ -54,7 +54,7 @@ def base_heading_w(
         (num_envs, 1)
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    base_heading_w = math_utils.euler_xyz_from_quat(asset.data.root_link_quat_w)[2]
+    base_heading_w = math_utils.euler_xyz_from_quat(asset.data.root_link_quat_w.torch)[2]
     base_heading_w = math_utils.wrap_to_pi(base_heading_w)  # wrap to [-pi, pi]
     base_heading_w = base_heading_w.unsqueeze(-1)  # (num_envs, 1)
     return base_heading_w
@@ -69,7 +69,7 @@ def root_tannorm_w(
         (num_envs, 6)
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    root_quat_w = asset.data.root_link_quat_w
+    root_quat_w = asset.data.root_link_quat_w.torch
     root_tannorm = instinct_math.quat_to_tan_norm(root_quat_w)
     return root_tannorm
 
@@ -82,13 +82,13 @@ def link_pos_b(
         (num_envs, num_links, 3)
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    link_pos_w = asset.data.body_link_pos_w[:, asset_cfg.body_ids]
+    link_pos_w = asset.data.body_link_pos_w.torch[:, asset_cfg.body_ids]
     if in_base_frame:
         link_pos = math_utils.transform_points(
             link_pos_w,
             *math_utils.subtract_frame_transforms(
-                asset.data.root_link_pos_w,
-                asset.data.root_link_quat_w,
+                asset.data.root_link_pos_w.torch,
+                asset.data.root_link_quat_w.torch,
             ),
         )
     else:
@@ -104,10 +104,10 @@ def link_quat_b(
         (num_envs, num_links, 4)
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    link_quat_w = asset.data.body_link_quat_w[:, asset_cfg.body_ids]
+    link_quat_w = asset.data.body_link_quat_w.torch[:, asset_cfg.body_ids]
     if in_base_frame:
         link_quat = math_utils.quat_mul(
-            math_utils.quat_inv(asset.data.root_link_quat_w).unsqueeze(1).expand(-1, link_quat_w.shape[1], -1),
+            math_utils.quat_inv(asset.data.root_link_quat_w.torch).unsqueeze(1).expand(-1, link_quat_w.shape[1], -1),
             link_quat_w,
         )
     else:
@@ -123,10 +123,10 @@ def link_tannorm_b(
         (num_envs, num_links, 6)
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    link_quat_w = asset.data.body_link_quat_w[:, asset_cfg.body_ids]
+    link_quat_w = asset.data.body_link_quat_w.torch[:, asset_cfg.body_ids]
     if in_base_frame:
         link_quat = math_utils.quat_mul(
-            math_utils.quat_inv(asset.data.root_link_quat_w).unsqueeze(1).expand(-1, link_quat_w.shape[1], -1),
+            math_utils.quat_inv(asset.data.root_link_quat_w.torch).unsqueeze(1).expand(-1, link_quat_w.shape[1], -1),
             link_quat_w,
         )
     else:

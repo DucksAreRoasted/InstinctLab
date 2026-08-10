@@ -13,7 +13,7 @@ task_entry = "instinctlab.tasks.shadowing.beyondmimic.config.g1"
 
 gym.register(
     id="Instinct-BeyondMimic-Plane-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.beyondmimic_plane_cfg:G1BeyondMimicPlaneEnvCfg",
@@ -24,7 +24,7 @@ gym.register(
 
 gym.register(
     id="Instinct-BeyondMimic-Plane-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.beyondmimic_plane_cfg:G1BeyondMimicPlaneEnvCfg_PLAY",

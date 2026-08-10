@@ -1,12 +1,6 @@
-from dataclasses import MISSING
-from typing import TYPE_CHECKING
-
-from isaaclab.managers import ManagerTermBaseCfg, SceneEntityCfg
+from isaaclab.managers import ManagerTermBaseCfg
 from isaaclab.sensors import SensorBaseCfg
-from isaaclab.utils import configclass
-
-from .monitor_manager import MonitorTerm
-from .monitors import TorqueMonitorSensor
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
@@ -18,14 +12,14 @@ class MonitorSensorCfg(SensorBaseCfg):
 
 @configclass
 class MonitorTermCfg(ManagerTermBaseCfg):
-    func: type[MonitorTerm] = MISSING
+    pass
 
 
 @configclass
 class TorqueMonitorSensorCfg(MonitorSensorCfg):
     """NOTE: Due to the update of joint_acc every decimation, it significantly decreases the performance (about 0.25x slower)."""
 
-    class_type: type = TorqueMonitorSensor
+    class_type: type | str = "{DIR}.monitors:TorqueMonitorSensor"
 
     prim_path: str = "/World/envs/env_*/Robot"
 

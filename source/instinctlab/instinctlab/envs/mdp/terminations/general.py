@@ -6,11 +6,11 @@ import torch
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.managers import ManagerTermBase, ManagerTermBaseCfg, SceneEntityCfg
-from isaaclab.sensors import ContactSensor
 
 if TYPE_CHECKING:
     from isaaclab.assets import RigidObject
     from isaaclab.envs import ManagerBasedRLEnv
+    from isaaclab.sensors import ContactSensor
 
     from instinctlab.motion_reference import MotionReferenceManager
 
@@ -35,9 +35,9 @@ def dataset_exhausted(
     """
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
     if check_all_frames:
-        return_ = torch.logical_not(
-            motion_reference.data.validity[motion_reference.ALL_INDICES]
-        ).any(dim=-1)  # shape: [N,]
+        return_ = torch.logical_not(motion_reference.data.validity[motion_reference.ALL_INDICES]).any(
+            dim=-1
+        )  # shape: [N,]
     else:
         return_ = torch.logical_not(
             motion_reference.data.validity[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
@@ -79,8 +79,8 @@ def terrain_out_of_bounds(
         asset: RigidObject = env.scene[asset_cfg.name]
 
         # check if the agent is out of bounds
-        x_out_of_bounds = torch.abs(asset.data.root_pos_w[:, 0]) > 0.5 * map_width - distance_buffer
-        y_out_of_bounds = torch.abs(asset.data.root_pos_w[:, 1]) > 0.5 * map_height - distance_buffer
+        x_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 0]) > 0.5 * map_width - distance_buffer
+        y_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 1]) > 0.5 * map_height - distance_buffer
         return_ = torch.logical_or(x_out_of_bounds, y_out_of_bounds)
         if print_reason and return_.any():
             print(f"The base is out of the terrain border:", return_.sum())
@@ -95,7 +95,7 @@ def abnormal_lin_vel(
     max_value: float = 40.0,  # [m/s]
 ):
     asset = env.scene[asset_cfg.name]
-    return torch.norm(asset.data.root_lin_vel_w, dim=-1) > max_value
+    return torch.norm(asset.data.root_lin_vel_w.torch, dim=-1) > max_value
 
 
 def abnormal_ang_vel(
@@ -104,7 +104,7 @@ def abnormal_ang_vel(
     max_value: float = 40.0,  # [rad/s]
 ):
     asset = env.scene[asset_cfg.name]
-    return torch.norm(asset.data.root_ang_vel_w, dim=-1) > max_value
+    return torch.norm(asset.data.root_ang_vel_w.torch, dim=-1) > max_value
 
 
 def abnormal_joint_vel(
@@ -113,7 +113,7 @@ def abnormal_joint_vel(
     max_value: float = 40.0,  # [rad/s]
 ):
     asset = env.scene[asset_cfg.name]
-    return torch.any(torch.abs(asset.data.joint_vel) > max_value, dim=-1)
+    return torch.any(torch.abs(asset.data.joint_vel.torch) > max_value, dim=-1)
 
 
 def abnormal_joint_acc(
@@ -122,7 +122,7 @@ def abnormal_joint_acc(
     max_value: float = 4000.0,  # [rad/s^2]
 ):
     asset = env.scene[asset_cfg.name]
-    return torch.any(torch.abs(asset.data.joint_acc) > max_value, dim=-1)
+    return torch.any(torch.abs(asset.data.joint_acc.torch) > max_value, dim=-1)
 
 
 class illegal_reset_contact(ManagerTermBase):
@@ -146,7 +146,7 @@ class illegal_reset_contact(ManagerTermBase):
         within the first episode_length_threshold steps.
         """
         contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-        net_contact_forces = contact_sensor.data.net_forces_w_history
+        net_contact_forces = contact_sensor.data.net_forces_w_history.torch
         contacts = torch.any(
             torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold, dim=1
         )

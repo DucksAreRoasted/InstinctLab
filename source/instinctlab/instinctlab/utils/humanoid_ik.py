@@ -146,7 +146,7 @@ class HumanoidSmplRotationalIK:
         - joint_positions: The joint positions of the robot, shape [N, len(joint_names)], if joint_names provided.
             Otherwise, all joints in the order of robot_chain.
         - robot_root_poses: The root poses of the robot_chain, shape [N, 7].
-            (x, y, z, qw, qx, qy, qz), (+x forward, +z up).
+            (x, y, z, qx, qy, qz, qw), (+x forward, +z up).
         """
 
         retargetted_joints, smpl_root_quat = self.retargetting_func_core(

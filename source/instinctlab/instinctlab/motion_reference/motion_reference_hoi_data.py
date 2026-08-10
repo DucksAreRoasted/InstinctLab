@@ -22,7 +22,7 @@ class HoiMotionSequence(MotionSequence):
     object_quat_w: torch.Tensor = None  # type: ignore
     """ The quaternions of the objects (w.r.t the world).
 
-    Shape: [N, num_frames, num_objects, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, num_objects, 4], in (x, y, z, w), N is the batch size.
     """
 
     object_lin_vel_w: torch.Tensor = None  # type: ignore
@@ -100,10 +100,10 @@ class HoiMotionSequence(MotionSequence):
             object_ang_vel_w=torch.zeros(batch_size, num_frames, num_objects, 3, device=device),
             object_validity=torch.zeros(batch_size, num_frames, num_objects, dtype=torch.bool, device=device),
         )
-        return_.base_quat_w[:, :, 0] = 1.0  # Set the w component of the quaternion to 1.0
-        return_.link_quat_b[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.link_quat_w[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.object_quat_w[:, :, :, 0] = 1.0  # Set the w component of the object quaternions to 1.0
+        return_.base_quat_w[:, :, 3] = 1.0
+        return_.link_quat_b[:, :, :, 3] = 1.0
+        return_.link_quat_w[:, :, :, 3] = 1.0
+        return_.object_quat_w[:, :, :, 3] = 1.0
         return return_
 
     @staticmethod
@@ -167,11 +167,11 @@ class HoiMotionSequence(MotionSequence):
                 batch_sizes=buffer_lengths, data_shape=(num_objects,), device=device, dtype=torch.bool
             ),  # type: ignore
         )
-        # Set the w component of the quaternion to 1.0
-        return_.base_quat_w.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device))  # type: ignore
-        return_.link_quat_b.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device).unsqueeze(0).expand(num_links, -1))  # type: ignore
-        return_.link_quat_w.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device).unsqueeze(0).expand(num_links, -1))  # type: ignore
-        return_.object_quat_w.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device).unsqueeze(0).expand(num_objects, -1))  # type: ignore
+        identity_quat = torch.tensor([0.0, 0.0, 0.0, 1.0], device=device)
+        return_.base_quat_w.fill_data(identity_quat)  # type: ignore
+        return_.link_quat_b.fill_data(identity_quat.unsqueeze(0).expand(num_links, -1))  # type: ignore
+        return_.link_quat_w.fill_data(identity_quat.unsqueeze(0).expand(num_links, -1))  # type: ignore
+        return_.object_quat_w.fill_data(identity_quat.unsqueeze(0).expand(num_objects, -1))  # type: ignore
         return return_
 
 
@@ -188,7 +188,7 @@ class HoiMotionReferenceData(MotionReferenceData):
     object_quat_w: torch.Tensor = None  # type: ignore
     """ The quaternions of the objects (w.r.t the world).
 
-    Shape: [N, num_frames, num_objects, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, num_objects, 4], in (x, y, z, w), N is the batch size.
     """
 
     object_lin_vel_w: torch.Tensor = None  # type: ignore
@@ -254,10 +254,10 @@ class HoiMotionReferenceData(MotionReferenceData):
             object_validity=torch.zeros(num_envs, num_frames, num_objects, dtype=torch.bool, device=device),
             scene_object_names=scene_object_names,
         )
-        return_.base_quat_w[:, :, 0] = 1.0  # Set the w component of the quaternion to 1.0
-        return_.link_quat_b[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.link_quat_w[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.object_quat_w[:, :, :, 0] = 1.0  # Set the w component of the object quaternions to 1.0
+        return_.base_quat_w[:, :, 3] = 1.0
+        return_.link_quat_b[:, :, :, 3] = 1.0
+        return_.link_quat_w[:, :, :, 3] = 1.0
+        return_.object_quat_w[:, :, :, 3] = 1.0
         return return_
 
     def reset(self, env_ids: Sequence[int] | torch.Tensor) -> None:
@@ -277,7 +277,7 @@ class HoiMotionReferenceData(MotionReferenceData):
             else:
                 tensor[env_ids] = 0
                 if "quat" in field.name:
-                    tensor[env_ids, ..., 0] = 1.0
+                    tensor[env_ids, ..., 3] = 1.0
 
 
 @dataclass
@@ -321,8 +321,8 @@ class HoiMotionReferenceState(MotionReferenceState):
             object_validity=torch.zeros(num_envs, num_objects, dtype=torch.bool, device=device),
             scene_object_names=scene_object_names,
         )
-        return_.base_quat_w[:, 0] = 1.0
-        return_.object_quat_w[:, :, 0] = 1.0
+        return_.base_quat_w[:, 3] = 1.0
+        return_.object_quat_w[:, :, 3] = 1.0
         return return_
 
     def __getitem__(self, idx: Sequence[int] | torch.Tensor | None):

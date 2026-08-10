@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
-from pxr import Usd
+import carb
+from pxr import Usd, UsdPhysics
 
-from isaaclab.sim import converters
+from isaaclab.sim import converters, schemas
 
 # Import the private helper from IsaacLab - we cannot add spawn_from_mesh to IsaacLab
 from isaaclab.sim.spawners.from_files.from_files import _spawn_from_usd_file
@@ -17,6 +19,65 @@ from isaaclab.sim.utils import clone
 
 if TYPE_CHECKING:
     from . import from_files_cfg
+
+
+def _activate_hierarchical_contact_sensors(root_prim: Usd.Prim) -> None:
+    """Activate contact reporting on every nested Importer 3.0 rigid body."""
+    rigid_prims: list[Usd.Prim] = []
+    queue = [root_prim]
+    while queue:
+        prim = queue.pop(0)
+        queue.extend(prim.GetChildren())
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            rigid_prims.append(prim)
+
+    if not rigid_prims:
+        raise RuntimeError(f"No rigid bodies found below '{root_prim.GetPath()}'.")
+    for prim in rigid_prims:
+        schemas.activate_contact_sensors(prim.GetPath().pathString)
+
+
+def _configure_tensor_leaf_matching(strict: bool) -> None:
+    if strict:
+        carb.settings.get_settings().set_bool("/physics/tensors/recursiveLeafPatternMatch", False)
+
+
+@clone
+def spawn_from_usd(
+    prim_path: str,
+    cfg: from_files_cfg.UsdFileCfg,
+    translation: tuple[float, float, float] | None = None,
+    orientation: tuple[float, float, float, float] | None = None,
+    **kwargs,
+) -> Usd.Prim:
+    """Spawn a prebuilt USD asset with Importer 3.0 nested-link support."""
+    if cfg.required_asset_digest and not os.path.isfile(cfg.usd_path):
+        raise FileNotFoundError(
+            f"Required immutable asset '{cfg.required_asset_digest}' is missing at '{cfg.usd_path}'."
+            f" Build it first with: {cfg.build_command}"
+        )
+    _configure_tensor_leaf_matching(cfg.strict_tensor_leaf_pattern_matching)
+    prim = _spawn_from_usd_file(prim_path, cfg.usd_path, cfg, translation, orientation, **kwargs)
+    if cfg.activate_contact_sensors:
+        _activate_hierarchical_contact_sensors(prim)
+    return prim
+
+
+@clone
+def spawn_from_urdf(
+    prim_path: str,
+    cfg: from_files_cfg.UrdfFileCfg,
+    translation: tuple[float, float, float] | None = None,
+    orientation: tuple[float, float, float, float] | None = None,
+    **kwargs,
+) -> Usd.Prim:
+    """Spawn a standard Importer 3.0 URDF asset with nested-link contact reporting."""
+    _configure_tensor_leaf_matching(cfg.strict_tensor_leaf_pattern_matching)
+    urdf_converter = converters.UrdfConverter(cfg)
+    prim = _spawn_from_usd_file(prim_path, urdf_converter.usd_path, cfg, translation, orientation, **kwargs)
+    if cfg.activate_contact_sensors:
+        _activate_hierarchical_contact_sensors(prim)
+    return prim
 
 
 @clone
@@ -47,7 +108,7 @@ def spawn_from_mesh(
         cfg: The configuration instance.
         translation: The translation to apply to the prim w.r.t. its parent prim. Defaults to None,
             in which case the translation specified in the generated USD file is used.
-        orientation: The orientation in (w, x, y, z) to apply to the prim w.r.t. its parent prim.
+        orientation: The orientation in (x, y, z, w) to apply to the prim w.r.t. its parent prim.
             Defaults to None, in which case the orientation specified in the generated USD file is used.
         **kwargs: Additional keyword arguments, like ``clone_in_fabric``.
 

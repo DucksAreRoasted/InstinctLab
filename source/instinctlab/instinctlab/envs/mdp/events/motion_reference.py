@@ -6,46 +6,17 @@ import tqdm
 from typing import TYPE_CHECKING
 
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation, RigidObject, RigidObjectCollection
 from isaaclab.managers import SceneEntityCfg
 
-from instinctlab.motion_reference import MotionReferenceManager
 from instinctlab.motion_reference.motion_reference_hoi_data import HoiMotionReferenceData, HoiMotionReferenceState
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation, RigidObject, RigidObjectCollection
     from isaaclab.envs import ManagerBasedEnv
 
     from instinctlab.envs.mdp import BeyondMimicAdaptiveWeighting
     from instinctlab.motion_reference import MotionReferenceData
-
-
-def virtualize_articulation(
-    env: ManagerBasedEnv,
-    env_ids: torch.Tensor | None,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot_reference"),
-):
-    """Virtualize the robot reference (Articulation) in the simulation by removing all
-    their collision shapes and setting their mass to zero.
-    """
-    asset: Articulation = env.scene[asset_cfg.name]
-
-    # resolve environment ids (num_envs)
-    if env_ids is None:
-        env_ids = torch.arange(env.scene.num_envs, dtype=torch.int, device="cpu")
-    else:
-        env_ids = env_ids.cpu().to(torch.int)
-
-    # select all bodies (num_bodies)
-    body_ids = torch.arange(asset.num_bodies, dtype=torch.int, device="cpu")
-
-    # build meshgrid for all environment and body ids
-    env_ids, body_ids = torch.meshgrid(env_ids, body_ids)
-
-    # get the current masses of the bodies (num_assets, num_bodies)
-    masses = asset.root_physx_view.get_masses()
-
-    # set the gravity of the bodies to zero
-    asset.root_physx_view.set_disable_gravities(torch.ones_like(masses).to(torch.bool), env_ids)
+    from instinctlab.motion_reference.motion_reference_manager import MotionReferenceManager
 
 
 def match_motion_ref_with_scene(
@@ -123,8 +94,8 @@ def reset_robot_state_by_reference(
         base_quat_w = motion_ref_init_state.base_quat_w
 
     # write the root pose to the simulation
-    asset.write_root_pose_to_sim(
-        torch.cat(
+    asset.write_root_pose_to_sim_index(
+        root_pose=torch.cat(
             [
                 base_pos_w,
                 base_quat_w,
@@ -150,8 +121,8 @@ def reset_robot_state_by_reference(
         base_ang_vel_w += vel_samples[:, 3:6]
 
     # write the root velocity to the simulation
-    asset.write_root_velocity_to_sim(
-        torch.cat(
+    asset.write_root_velocity_to_sim_index(
+        root_velocity=torch.cat(
             [
                 base_lin_vel_w,
                 base_ang_vel_w,
@@ -172,9 +143,9 @@ def reset_robot_state_by_reference(
         joint_pos += joint_pos_noise
 
     # write the joint state to the simulation
-    asset.write_joint_state_to_sim(
-        joint_pos,
-        joint_vel,
+    asset.write_joint_state_to_sim_index(
+        position=joint_pos,
+        velocity=joint_vel,
         env_ids=env_ids,
     )
 
@@ -206,12 +177,14 @@ def _apply_rigid_object_states(
         invalid_object_pos: If not None, set invalid objects to this position (e.g. to hide them).
             If None, invalid objects are not updated.
     """
+    from isaaclab.assets import RigidObject
+
     # Ensure env_ids is on the same device as data
     if env_ids.device != object_pos.device:
         env_ids = env_ids.to(object_pos.device)
 
     device = object_pos.device
-    identity_quat = torch.tensor([1.0, 0.0, 0.0, 0.0], device=device, dtype=object_quat.dtype)
+    identity_quat = torch.tensor([0.0, 0.0, 0.0, 1.0], device=device, dtype=object_quat.dtype)
     zero_vel = torch.zeros(3, device=device, dtype=object_lin_vel.dtype)
 
     if rigid_object_collection_cfg is not None:
@@ -236,11 +209,11 @@ def _apply_rigid_object_states(
                     dim=-1,
                 )
 
-                collection.write_object_link_pose_to_sim(
-                    root_pose.unsqueeze(1), env_ids=valid_env_ids, object_ids=obj_idx
+                collection.write_body_link_pose_to_sim_index(
+                    body_poses=root_pose.unsqueeze(1), env_ids=valid_env_ids, body_ids=[obj_idx]
                 )
-                collection.write_object_link_velocity_to_sim(
-                    root_velocity.unsqueeze(1), env_ids=valid_env_ids, object_ids=obj_idx
+                collection.write_body_link_velocity_to_sim_index(
+                    body_velocities=root_velocity.unsqueeze(1), env_ids=valid_env_ids, body_ids=[obj_idx]
                 )
 
             # Optionally set invalid objects to a fixed position
@@ -257,11 +230,11 @@ def _apply_rigid_object_states(
                 invalid_ang_vel = zero_vel.unsqueeze(0).expand(n_invalid, 3)
                 root_pose = torch.cat([invalid_pos, invalid_quat], dim=-1)
                 root_velocity = torch.cat([invalid_lin_vel, invalid_ang_vel], dim=-1)
-                collection.write_object_link_pose_to_sim(
-                    root_pose.unsqueeze(1), env_ids=invalid_env_ids, object_ids=obj_idx
+                collection.write_body_link_pose_to_sim_index(
+                    body_poses=root_pose.unsqueeze(1), env_ids=invalid_env_ids, body_ids=[obj_idx]
                 )
-                collection.write_object_link_velocity_to_sim(
-                    root_velocity.unsqueeze(1), env_ids=invalid_env_ids, object_ids=obj_idx
+                collection.write_body_link_velocity_to_sim_index(
+                    body_velocities=root_velocity.unsqueeze(1), env_ids=invalid_env_ids, body_ids=[obj_idx]
                 )
         return
 
@@ -294,8 +267,8 @@ def _apply_rigid_object_states(
                 dim=-1,
             )
 
-            asset.write_root_pose_to_sim(root_pose, env_ids=valid_env_ids)
-            asset.write_root_velocity_to_sim(root_velocity, env_ids=valid_env_ids)
+            asset.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=valid_env_ids)
+            asset.write_root_velocity_to_sim_index(root_velocity=root_velocity, env_ids=valid_env_ids)
 
         # Optionally set invalid objects to a fixed position
         if invalid_object_pos is not None and (~valid_mask).any():
@@ -311,8 +284,8 @@ def _apply_rigid_object_states(
             invalid_ang_vel = zero_vel.unsqueeze(0).expand(n_invalid, 3)
             root_pose = torch.cat([invalid_pos, invalid_quat], dim=-1)
             root_velocity = torch.cat([invalid_lin_vel, invalid_ang_vel], dim=-1)
-            asset.write_root_pose_to_sim(root_pose, env_ids=invalid_env_ids)
-            asset.write_root_velocity_to_sim(root_velocity, env_ids=invalid_env_ids)
+            asset.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=invalid_env_ids)
+            asset.write_root_velocity_to_sim_index(root_velocity=root_velocity, env_ids=invalid_env_ids)
 
 
 def reset_rigid_objects_state_by_reference(

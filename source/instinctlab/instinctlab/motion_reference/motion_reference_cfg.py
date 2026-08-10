@@ -6,19 +6,15 @@ from typing import Literal
 import isaaclab.sim as sim_utils
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.sensors import SensorBaseCfg
-from isaaclab.sim import schemas
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-
-from .motion_buffer import MotionBuffer, MotionReferenceData, MotionReferenceState
-from .motion_reference_manager import MotionReferenceManager
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
 class MotionBufferCfg:
     """Configuration for the motion buffer."""
 
-    class_type: type = MotionBuffer
+    class_type: type | str = "{DIR}.motion_buffer:MotionBuffer"
 
     clip_joint_ref_to_robot_limits: bool = False
     """ clip the joint reference to the robot joint limits. """
@@ -26,14 +22,19 @@ class MotionBufferCfg:
 
 @configclass
 class MotionReferenceManagerCfg(SensorBaseCfg):
-    """Configuration for the motion reference manager."""
+    """Configuration for the scene-managed motion reference provider.
 
-    class_type: type = MotionReferenceManager
+    ``SensorBaseCfg`` is used deliberately so Isaac Lab constructs, initializes, resets, and
+    timestamps the provider with the rest of the interactive scene. It does not imply that motion
+    references represent a physical sensor.
+    """
 
-    data_class_type: type = MotionReferenceData
+    class_type: type | str = "{DIR}.motion_reference_manager:MotionReferenceManager"
+
+    data_class_type: type | str = "{DIR}.motion_buffer:MotionReferenceData"
     """ The class type of the motion reference data. Use this config to override the default motion reference data class. """
 
-    state_class_type: type = MotionReferenceState
+    state_class_type: type | str = "{DIR}.motion_buffer:MotionReferenceState"
     """ The class type of the motion reference state. Use this config to override the default motion reference state class. """
 
     scene_object_names: list[str] = []
@@ -106,6 +107,11 @@ class MotionReferenceManagerCfg(SensorBaseCfg):
     """ the joint indices to augment the motion data symmetrically,
         If None, no symmetric augmentation is performed.
     """
+    symmetric_augmentation_joint_names: Sequence[str] | None = None
+    """Joint-name order in which the joint mapping and reverse buffer are defined.
+
+    When provided, the manager remaps both arrays into the articulation's runtime joint order.
+    """
     symmetric_augmentation_link_mapping: Sequence[int] | None = None
     """ link mapping is in the order of `link_of_interests` """
 
@@ -155,8 +161,3 @@ class MotionReferenceManagerCfg(SensorBaseCfg):
     - 'aiming_frame': get aiming frame idx and select from the motion_reference data
     - 'reference_frame': get the reference state directly from motion_reference.reference_frame
     """
-
-
-@configclass
-class NoCollisionPropertiesCfg(schemas.CollisionPropertiesCfg):
-    collision_enabled: bool = False

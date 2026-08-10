@@ -582,7 +582,10 @@ class AmassMotion(MotionBuffer):
         )
         joint_pos = torch.as_tensor(raw_data["joint_pos"], device=self.buffer_device, dtype=torch.float)
         root_trans = torch.as_tensor(raw_data["base_pos_w"], device=self.buffer_device, dtype=torch.float)
-        root_quat = torch.as_tensor(raw_data["base_quat_w"], device=self.buffer_device, dtype=torch.float)
+        # Retargeted NPZ files are a stable on-disk WXYZ boundary. Isaac Lab 3 and all
+        # InstinctLab runtime buffers use XYZW.
+        root_quat_wxyz = torch.as_tensor(raw_data["base_quat_w"], device=self.buffer_device, dtype=torch.float)
+        root_quat = math_utils.convert_quat(root_quat_wxyz, to="xyzw")
 
         # qpos_isaac = qpos[retargetted_joints_to_output_joints_ids]
         retargetted_joints_to_output_joints_ids = [joint_names.index(j_name) for j_name in self.isaac_joint_names]
@@ -616,7 +619,7 @@ class AmassMotion(MotionBuffer):
         # Translation: cm to meters
         root_trans = torch.as_tensor(raw_values[:, 1:4] * 0.01, dtype=torch.float, device=self.buffer_device)
 
-        # Rotation: Euler XYZ degrees to Quaternion (w, x, y, z)
+        # Rotation: Euler XYZ degrees to quaternion (x, y, z, w).
         euler_xyz = torch.as_tensor(np.deg2rad(raw_values[:, 4:7]), dtype=torch.float, device=self.buffer_device)
         root_quat = math_utils.quat_from_euler_xyz(euler_xyz[:, 0], euler_xyz[:, 1], euler_xyz[:, 2])
 

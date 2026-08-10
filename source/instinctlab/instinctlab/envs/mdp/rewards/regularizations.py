@@ -37,7 +37,7 @@ def motors_power_square(
     normalize_by_num_joints: bool = False,
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    power_j = asset.data.applied_torque * asset.data.joint_vel  # (batch_size, num_joints)
+    power_j = asset.data.applied_torque.torch * asset.data.joint_vel.torch  # (batch_size, num_joints)
     if normalize_by_stiffness:
         for _, actuator in asset.actuators.items():
             power_j[:, actuator.joint_indices] /= actuator.stiffness
@@ -54,7 +54,9 @@ def body_lin_acc_square(
     normalize_by_num_bodies: bool = False,
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    bodies_acc = torch.norm(asset.data.body_lin_acc_w[:, asset_cfg.body_ids, :], dim=-1)  # (batch_size, num_bodies)
+    bodies_acc = torch.norm(
+        asset.data.body_lin_acc_w.torch[:, asset_cfg.body_ids, :], dim=-1
+    )  # (batch_size, num_bodies)
     body_lin_acc_err = torch.square(bodies_acc)  # (batch_size, num_bodies)
     body_lin_acc_err = torch.sum(body_lin_acc_err, dim=-1)  # (batch_size,)
 
@@ -73,7 +75,9 @@ def body_lin_acc_gauss(
     combine_method: str = "prod",
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    bodies_acc = torch.norm(asset.data.body_lin_acc_w[:, asset_cfg.body_ids, :], dim=-1)  # (batch_size, num_bodies)
+    bodies_acc = torch.norm(
+        asset.data.body_lin_acc_w.torch[:, asset_cfg.body_ids, :], dim=-1
+    )  # (batch_size, num_bodies)
     if torlerance > 0:
         bodies_acc = torch.clamp(bodies_acc - torlerance, min=0.0)
     body_lin_acc_err = torch.square(bodies_acc)  # (batch_size, num_bodies)
@@ -246,7 +250,7 @@ def joint_deviation_square(
 ):
     asset: Articulation = env.scene[asset_cfg.name]
     joint_deviation = (
-        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+        asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]
     )
     return torch.sum(torch.square(joint_deviation), dim=-1)  # (batch_size,)
 
@@ -258,7 +262,7 @@ class joint_torque_sign_switch(ManagerTermBase):
         super().__init__(cfg, env)
         self.asset_cfg = cfg.params.get("asset_cfg", SceneEntityCfg("robot"))
         self.asset = env.scene[self.asset_cfg.name]
-        self._last_joint_torque = torch.zeros_like(self.asset.data.applied_torque[:, self.asset_cfg.joint_ids])
+        self._last_joint_torque = torch.zeros_like(self.asset.data.applied_torque.torch[:, self.asset_cfg.joint_ids])
 
     def __call__(
         self,
@@ -266,7 +270,7 @@ class joint_torque_sign_switch(ManagerTermBase):
         asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
         normalize_by_num_joints: bool = False,
     ):
-        joint_torque = self.asset.data.applied_torque[:, asset_cfg.joint_ids]
+        joint_torque = self.asset.data.applied_torque.torch[:, asset_cfg.joint_ids]
         joint_torque_sign_switch = torch.clip(torch.sign(joint_torque) * torch.sign(-self._last_joint_torque), min=0.0)
 
         joint_torque_sign_switch_err = torch.sum(joint_torque_sign_switch, dim=-1)  # (batch_size,)
@@ -288,7 +292,7 @@ def joint_torques_l2(
 ):
     """Similar implementation as isaaclab.envs.mdp.rewards.joint_torques_l2, with more options. The default behavior is the same."""
     asset: Articulation = env.scene[asset_cfg.name]
-    torques = torch.abs(asset.data.applied_torque)
+    torques = torch.abs(asset.data.applied_torque.torch)
 
     if normalize_by_stiffness:
         for _, actuator in asset.actuators.items():
@@ -313,7 +317,7 @@ def joint_torques_gauss(
     normalize_by_num_joints: bool = False,
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    torques = torch.abs(asset.data.applied_torque)
+    torques = torch.abs(asset.data.applied_torque.torch)
 
     if normalize_by_stiffness:
         for _, actuator in asset.actuators.items():
@@ -346,9 +350,9 @@ class joint_torques_direction_switch(ManagerTermBase):
         super().__init__(cfg, env)
         self.asset_cfg = cfg.params.get("asset_cfg", SceneEntityCfg("robot"))
         self.asset = env.scene[self.asset_cfg.name]
-        self._last_torque_direction = torch.sign(self.asset.data.applied_torque[:, self.asset_cfg.joint_ids])
+        self._last_torque_direction = torch.sign(self.asset.data.applied_torque.torch[:, self.asset_cfg.joint_ids])
         self._torque_direction_switch_count = torch.zeros_like(
-            self.asset.data.applied_torque[:, self.asset_cfg.joint_ids], dtype=torch.float
+            self.asset.data.applied_torque.torch[:, self.asset_cfg.joint_ids], dtype=torch.float
         )  # (batch_size, num_joints)
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
@@ -366,7 +370,7 @@ class joint_torques_direction_switch(ManagerTermBase):
         Args:
             mask: If True, the error will be masked by the current direction switch mask
         """
-        joint_torque = self.asset.data.applied_torque[:, self.asset_cfg.joint_ids]
+        joint_torque = self.asset.data.applied_torque.torch[:, self.asset_cfg.joint_ids]
         joint_torque_direction = torch.sign(joint_torque)
         direction_switch = joint_torque_direction != self._last_torque_direction
 
@@ -397,7 +401,7 @@ class joint_acc_l2_step(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
         self.asset = env.scene[cfg.params.get("asset_cfg", SceneEntityCfg("robot")).name]
-        self._last_joint_vel = torch.zeros_like(self.asset.data.joint_vel)
+        self._last_joint_vel = torch.zeros_like(self.asset.data.joint_vel.torch)
 
     def __call__(
         self,
@@ -406,7 +410,7 @@ class joint_acc_l2_step(ManagerTermBase):
         normalize_by_num_joints: bool = False,
     ):
         step_dt = env.step_dt
-        joint_acc = (self.asset.data.joint_vel - self._last_joint_vel) / step_dt
+        joint_acc = (self.asset.data.joint_vel.torch - self._last_joint_vel) / step_dt
         joint_acc_err = torch.square(joint_acc[:, asset_cfg.joint_ids])  # (batch_size, num_joints)
 
         if normalize_by_num_joints:
@@ -414,7 +418,7 @@ class joint_acc_l2_step(ManagerTermBase):
         else:
             joint_acc_err = torch.sum(joint_acc_err, dim=-1)
 
-        self._last_joint_vel[:] = self.asset.data.joint_vel
+        self._last_joint_vel[:] = self.asset.data.joint_vel.torch
         return joint_acc_err
 
     def reset(self, env_ids: Sequence[int] | slice):
@@ -430,7 +434,7 @@ def joint_acc_gauss(
     combine_method: str = "prod",
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    joint_acc = torch.abs(asset.data.joint_acc[:, asset_cfg.joint_ids])
+    joint_acc = torch.abs(asset.data.joint_acc.torch[:, asset_cfg.joint_ids])
     if torlerance > 0:
         joint_acc = torch.clamp(joint_acc - torlerance, min=0.0)
     joint_acc_err = torch.square(joint_acc)  # (batch_size, num_joints)
@@ -458,7 +462,7 @@ class joint_acc_gauss_step(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
         self.asset = env.scene[cfg.params.get("asset_cfg", SceneEntityCfg("robot")).name]
-        self._last_joint_vel = torch.zeros_like(self.asset.data.joint_vel)
+        self._last_joint_vel = torch.zeros_like(self.asset.data.joint_vel.torch)
 
     def __call__(
         self,
@@ -470,7 +474,7 @@ class joint_acc_gauss_step(ManagerTermBase):
         combine_method: str = "prod",
     ):
         step_dt = env.step_dt
-        joint_acc = (self.asset.data.joint_vel - self._last_joint_vel) / step_dt
+        joint_acc = (self.asset.data.joint_vel.torch - self._last_joint_vel) / step_dt
 
         joint_acc = torch.abs(joint_acc[:, asset_cfg.joint_ids])
         if torlerance > 0:
@@ -489,7 +493,7 @@ class joint_acc_gauss_step(ManagerTermBase):
             if normalize_by_num_joints:
                 joint_acc_err /= joint_acc.shape[-1]
 
-        self._last_joint_vel[:] = self.asset.data.joint_vel
+        self._last_joint_vel[:] = self.asset.data.joint_vel.torch
         return joint_acc_err
 
     def reset(self, env_ids: Sequence[int] | slice):
@@ -505,10 +509,12 @@ class joint_acc_direction_switch(ManagerTermBase):
         super().__init__(cfg, env)
         self.asset_cfg = cfg.params.get("asset_cfg", SceneEntityCfg("robot"))
         self.asset: Articulation = env.scene[self.asset_cfg.name]
-        self._last_vel = torch.zeros_like(self.asset.data.joint_vel[:, self.asset_cfg.joint_ids])
-        self._last_acc_direction = torch.zeros_like(self.asset.data.joint_vel[:, self.asset_cfg.joint_ids])  # +1 or -1
+        self._last_vel = torch.zeros_like(self.asset.data.joint_vel.torch[:, self.asset_cfg.joint_ids])
+        self._last_acc_direction = torch.zeros_like(
+            self.asset.data.joint_vel.torch[:, self.asset_cfg.joint_ids]
+        )  # +1 or -1
         self._joint_acc_direction_switch_count = torch.zeros_like(
-            self.asset.data.joint_vel[:, self.asset_cfg.joint_ids], dtype=torch.float
+            self.asset.data.joint_vel.torch[:, self.asset_cfg.joint_ids], dtype=torch.float
         )
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
@@ -527,7 +533,7 @@ class joint_acc_direction_switch(ManagerTermBase):
         Args:
             mask: If True, the error will be masked by the current direction switch mask
         """
-        joint_vel = self.asset.data.joint_vel[:, asset_cfg.joint_ids]
+        joint_vel = self.asset.data.joint_vel.torch[:, asset_cfg.joint_ids]
         joint_acc_direction = torch.sign(joint_vel - self._last_vel)
         direction_switch = joint_acc_direction != self._last_acc_direction  # (batch_size, num_joints)
         self._joint_acc_direction_switch_count[env.episode_length_buf <= 1] = 0.0  # reset the count at the beginning
@@ -556,7 +562,7 @@ def joint_vel_gauss(
     combine_method: str = "prod",
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    joint_vel = torch.abs(asset.data.joint_vel[:, asset_cfg.joint_ids])
+    joint_vel = torch.abs(asset.data.joint_vel.torch[:, asset_cfg.joint_ids])
     if torlerance > 0:
         joint_vel = torch.clamp(joint_vel - torlerance, min=0.0)
     joint_vel_err = torch.square(joint_vel)  # (batch_size, num_joints)
@@ -585,9 +591,9 @@ class joint_vel_direction_switch(ManagerTermBase):
         super().__init__(cfg, env)
         self.asset_cfg = cfg.params.get("asset_cfg", SceneEntityCfg("robot"))
         self.asset: Articulation = env.scene[self.asset_cfg.name]
-        self._last_vel_direction = torch.sign(self.asset.data.joint_vel[:, self.asset_cfg.joint_ids])
+        self._last_vel_direction = torch.sign(self.asset.data.joint_vel.torch[:, self.asset_cfg.joint_ids])
         self._joint_vel_direction_switch_count = torch.zeros_like(
-            self.asset.data.joint_vel[:, self.asset_cfg.joint_ids], dtype=torch.float
+            self.asset.data.joint_vel.torch[:, self.asset_cfg.joint_ids], dtype=torch.float
         )
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
@@ -605,7 +611,7 @@ class joint_vel_direction_switch(ManagerTermBase):
         Args:
             mask: If True, the error will be masked by the current direction switch mask
         """
-        joint_vel = self.asset.data.joint_vel[:, asset_cfg.joint_ids]
+        joint_vel = self.asset.data.joint_vel.torch[:, asset_cfg.joint_ids]
         joint_vel_direction = torch.sign(joint_vel)
         direction_switch = joint_vel_direction != self._last_vel_direction
         self._joint_vel_direction_switch_count[env.episode_length_buf <= 1] = 0.0  # reset the count at the beginning
@@ -635,7 +641,9 @@ def joint_err_gauss(
     combine_method: str = "prod",
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    joint_diff = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    joint_diff = (
+        asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]
+    )
     joint_err = torch.abs(joint_diff)
     if torlerance > 0:
         joint_err = torch.clamp(joint_err - torlerance, min=0.0)
@@ -673,17 +681,19 @@ def joint_pos_limits_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     # compute out of limits constraints
     out_of_limits = -(
-        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 0]
+        asset.data.joint_pos.torch[:, asset_cfg.joint_ids]
+        - asset.data.soft_joint_pos_limits.torch[:, asset_cfg.joint_ids, 0]
     ).clip(max=0.0)
     out_of_limits += (
-        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 1]
+        asset.data.joint_pos.torch[:, asset_cfg.joint_ids]
+        - asset.data.soft_joint_pos_limits.torch[:, asset_cfg.joint_ids, 1]
     ).clip(min=0.0)
     out_of_limits_err = torch.square(out_of_limits)
 
     if normalize_by_limits:
         out_of_limits_err /= torch.square(
-            asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 1]
-            - asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 0]
+            asset.data.soft_joint_pos_limits.torch[:, asset_cfg.joint_ids, 1]
+            - asset.data.soft_joint_pos_limits.torch[:, asset_cfg.joint_ids, 0]
         )
 
     if combine_method == "prod":
@@ -713,7 +723,7 @@ def applied_torque_limits_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     # compute out of limits constraints
     # TODO: We need to fix this to support implicit joints.
-    out_of_limits = torch.abs(asset.data.applied_torque - asset.data.computed_torque)
+    out_of_limits = torch.abs(asset.data.applied_torque.torch - asset.data.computed_torque.torch)
     if normalize_by_stiffness:
         for _, actuator in asset.actuators.items():
             out_of_limits[:, actuator.joint_indices] /= actuator.stiffness
@@ -743,7 +753,7 @@ def applied_torque_limits_square(
     normalize_by_num_joints: bool = False,
 ):
     asset: Articulation = env.scene[asset_cfg.name]
-    out_of_limits = torch.abs(asset.data.applied_torque - asset.data.computed_torque)
+    out_of_limits = torch.abs(asset.data.applied_torque.torch - asset.data.computed_torque.torch)
     if normalize_by_stiffness:
         for _, actuator in asset.actuators.items():
             out_of_limits[:, actuator.joint_indices] /= actuator.stiffness
@@ -765,10 +775,10 @@ def applied_torque_limits_by_ratio(
     """Penalize when the applied torque excceed certain ratio of the joint torque limit."""
     asset: Articulation = env.scene[asset_cfg.name]
 
-    joint_effort_limits = asset.data.joint_effort_limits  # (num_envs, num_joints)
+    joint_effort_limits = asset.data.joint_effort_limits.torch  # (num_envs, num_joints)
     joint_effort_limits = joint_effort_limits[:, asset_cfg.joint_ids]
 
-    applied_torque = asset.data.applied_torque[:, asset_cfg.joint_ids]
+    applied_torque = asset.data.applied_torque.torch[:, asset_cfg.joint_ids]
     applied_torque = torch.abs(applied_torque)
 
     out_of_limits = (applied_torque - joint_effort_limits * limit_ratio).clip(min=0)
@@ -793,12 +803,13 @@ def contact_slide(
     # Penalize body sliding
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = (
-        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > threshold
+        contact_sensor.data.net_forces_w_history.torch[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0]
+        > threshold
     )
     asset = env.scene[asset_cfg.name]
 
-    body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
-    body_ang_vel = asset.data.body_ang_vel_w[:, asset_cfg.body_ids, :2]
+    body_vel = asset.data.body_lin_vel_w.torch[:, asset_cfg.body_ids, :2]
+    body_ang_vel = asset.data.body_ang_vel_w.torch[:, asset_cfg.body_ids, :2]
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     if ang_vel_penalty:
         reward = reward + torch.sum(body_ang_vel.norm(dim=-1) * contacts, dim=1)
@@ -820,11 +831,12 @@ def contact_rotate(
     # Penalize body rotation
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = (
-        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > threshold
+        contact_sensor.data.net_forces_w_history.torch[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0]
+        > threshold
     )
     asset = env.scene[asset_cfg.name]
 
-    body_ang_vel = asset.data.body_ang_vel_w[:, asset_cfg.body_ids, :2]
+    body_ang_vel = asset.data.body_ang_vel_w.torch[:, asset_cfg.body_ids, :2]
     reward = torch.sum(body_ang_vel.norm(dim=-1) * contacts, dim=1)
     return reward
 
@@ -840,9 +852,9 @@ def contact_switch(
     # is_first_contact: (batch_size, num_bodies)
     # is_first_detached: (batch_size, num_bodies)
     is_first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
-    # last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+    # last_air_time = contact_sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
     is_first_air = contact_sensor.compute_first_air(env.step_dt)[:, sensor_cfg.body_ids]
-    # last_contact_time = contact_sensor.data.last_contact_time[:, sensor_cfg.body_ids]
+    # last_contact_time = contact_sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids]
 
     # If not counting contacts or detachments, set the corresponding tensors to zero
     if not count_contact:
@@ -863,7 +875,7 @@ def contact_air_time(
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     is_first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     # Get the air time
-    last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+    last_air_time = contact_sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
     # Compute the reward
     reward = torch.sum((last_air_time - threshold) * is_first_contact, dim=-1)  # (batch_size,)
     return reward
@@ -878,7 +890,7 @@ def contact_stay_time(
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     is_first_air = contact_sensor.compute_first_air(env.step_dt)[:, sensor_cfg.body_ids]
     # Get the contact time
-    last_contact_time = contact_sensor.data.last_contact_time[:, sensor_cfg.body_ids]
+    last_contact_time = contact_sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids]
     # Compute the reward
     reward = torch.sum((last_contact_time - threshold) * is_first_air, dim=-1)  # (batch_size,)
     return reward

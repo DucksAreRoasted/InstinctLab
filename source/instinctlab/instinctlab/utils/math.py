@@ -43,7 +43,7 @@ def xyz_to_zxy(points):
 def quat_to_tan_norm(q: torch.Tensor) -> torch.Tensor:
     """Convert a quaternion to tangent and normal vectors. (Directly copied from MaskedMimic's ProtoMotions)
     Args:
-        q: The quaternion in (w, x, y, z). Shape is (..., 4)
+        q: The quaternion in (x, y, z, w). Shape is (..., 4)
 
     Returns:
         The tangent and normal vectors in the quaternion representation. Shape is (..., 6)
@@ -68,7 +68,7 @@ def tan_norm_to_quat(tannorm: torch.Tensor) -> torch.Tensor:
         tannorm: The tangent and normal vectors in the quaternion representation. Shape is (..., 6)
 
     Returns:
-        The quaternion in (w, x, y, z). Shape is (..., 4)
+        The quaternion in (x, y, z, w). Shape is (..., 4)
     """
     tan = tannorm[..., 0:3]
     norm = tannorm[..., 3:6]
@@ -82,14 +82,14 @@ def tan_norm_to_quat(tannorm: torch.Tensor) -> torch.Tensor:
 def quat_slerp_batch(q1: torch.Tensor, q2: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
     """Interpolate and sample across the quaternion (batch) based on the given t (batch).
     Args:
-        q1, q2: The quaternion in (w, x, y, z). Shape is (B, 4)
+        q1, q2: The quaternion in (x, y, z, w). Shape is (B, 4)
         tau: The interpolation factor. Shape is (B,). Type is float where 0 <= t <= 1
     Return:
-        The interpolated quaternion in (w, x, y, z). Shape is (B, 4)
+        The interpolated quaternion in (x, y, z, w). Shape is (B, 4)
     """
     # ensure the input is in the right shape
-    assert q1.shape[-1] == 4, "The quaternion must be in (w, x, y, z) format."
-    assert q2.shape[-1] == 4, "The quaternion must be in (w, x, y, z) format."
+    assert q1.shape[-1] == 4, "The quaternion must be in (x, y, z, w) format."
+    assert q2.shape[-1] == 4, "The quaternion must be in (x, y, z, w) format."
     assert tau.shape == q1.shape[:-1], "The batch size must be the same for all inputs."
     assert q1.shape[0] == q2.shape[0] == tau.shape[0], "The batch size must be the same for all inputs."
     assert (tau >= 0).all() and (tau <= 1).all(), "The interpolation factor must be in (0, 1) range."
@@ -122,14 +122,14 @@ def quat_slerp_batch(q1: torch.Tensor, q2: torch.Tensor, tau: torch.Tensor) -> t
 def quat_angular_velocity(q_prev: torch.Tensor, q_next: torch.Tensor, dt: float) -> torch.Tensor:
     """Compute the angular velocity between two quaternions. (from q_prev to q_next in dt seconds)
     Args:
-        q_prev, q_next: The quaternion in (w, x, y, z). Shape is (..., 4)
+        q_prev, q_next: The quaternion in (x, y, z, w). Shape is (..., 4)
         dt: The time difference between the two quaternions.
     Returns:
         The angular velocity in the local frame. Shape is (..., 3)
     """
     # ensure the input is in the right shape
-    assert q_prev.shape[-1] == 4, "The quaternion must be in (w, x, y, z) format."
-    assert q_next.shape[-1] == 4, "The quaternion must be in (w, x, y, z) format."
+    assert q_prev.shape[-1] == 4, "The quaternion must be in (x, y, z, w) format."
+    assert q_next.shape[-1] == 4, "The quaternion must be in (x, y, z, w) format."
     assert q_prev.shape == q_next.shape, "The shape of the two quaternions must be the same."
     assert dt > 0, "The time difference must be positive."
 

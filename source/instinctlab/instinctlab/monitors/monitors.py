@@ -6,6 +6,8 @@ import torch
 from torch.distributions import Multinomial
 from typing import TYPE_CHECKING, Sequence
 
+import warp as wp
+
 import isaaclab.utils.math as math_utils
 from isaaclab.managers import SceneEntityCfg
 
@@ -52,10 +54,12 @@ class TorqueMonitorSensor(MonitorSensor):
     Operations
     """
 
-    def reset(self, env_ids: Sequence[int] | None = None):
+    def reset(self, env_ids: Sequence[int] | None = None, env_mask: wp.array | None = None):
         # self._torque_buffer[env_ids] = 0.0
-        self._step_idx[env_ids] = 0
-        super().reset(env_ids)
+        resolved_mask = self._resolve_indices_and_mask(env_ids, env_mask)
+        resolved_ids = wp.to_torch(resolved_mask).nonzero(as_tuple=False).squeeze(-1)
+        self._step_idx[resolved_ids] = 0
+        super().reset(env_mask=resolved_mask)
 
     def update(self, dt: float, force_recompute: bool = False):
         self._step_idx += 1
@@ -86,8 +90,10 @@ class TorqueMonitorSensor(MonitorSensor):
         # set the buffer index
         self._step_idx = torch.zeros(self._view.count, dtype=torch.int32, device=self.device)
 
-    def _update_buffers_impl(self, env_ids):
-        self._torque_buffer[:, self._step_idx] = self._view.get_dof_actuation_forces()  # type: ignore
+    def _update_buffers_impl(self, env_mask: wp.array):
+        env_ids = wp.to_torch(env_mask).nonzero(as_tuple=False).squeeze(-1)
+        torques = wp.to_torch(self._view.get_dof_actuation_forces())
+        self._torque_buffer[env_ids, self._step_idx[env_ids]] = torques[env_ids]
 
     def _invalidate_initialize_callback(self, event):
         super()._invalidate_initialize_callback(event)
@@ -121,29 +127,31 @@ class JointStatMonitorTerm(MonitorTerm):
         # that settle before the last step of a logging interval become invisible in the logs.
         self._computed_torque_max[:] = torch.maximum(
             self._computed_torque_max,
-            torch.abs(asset.data.computed_torque[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
+            torch.abs(asset.data.computed_torque.torch[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
         )
         self._joint_acc[:] = (
-            torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel).mean(
-                dim=-1
-            )
+            torch.abs(
+                asset.data.joint_vel.torch[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel
+            ).mean(dim=-1)
             / dt
         )
         self._joint_acc_max[:] = torch.maximum(
             self._joint_acc_max,
-            torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel)
+            torch.abs(asset.data.joint_vel.torch[:, self.cfg.params["asset_cfg"].joint_ids] - self._last_joint_vel)
             .max(dim=-1)
             .values
             / dt,
         )
-        self._joint_vel[:] = torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids]).mean(dim=-1)
+        self._joint_vel[:] = torch.abs(asset.data.joint_vel.torch[:, self.cfg.params["asset_cfg"].joint_ids]).mean(
+            dim=-1
+        )
         self._joint_vel_max[:] = torch.maximum(
             self._joint_vel_max,
-            torch.abs(asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
+            torch.abs(asset.data.joint_vel.torch[:, self.cfg.params["asset_cfg"].joint_ids]).max(dim=-1).values,
         )
         self._joint_pos[:] = torch.abs(
-            asset.data.joint_pos[:, self.cfg.params["asset_cfg"].joint_ids]
-            - asset.data.default_joint_pos[:, self.cfg.params["asset_cfg"].joint_ids]
+            asset.data.joint_pos.torch[:, self.cfg.params["asset_cfg"].joint_ids]
+            - asset.data.default_joint_pos.torch[:, self.cfg.params["asset_cfg"].joint_ids]
         ).mean(dim=-1)
         self._action_rate[:] = torch.abs(self._env.action_manager.action - self._env.action_manager.prev_action).mean(
             dim=-1
@@ -157,7 +165,7 @@ class JointStatMonitorTerm(MonitorTerm):
             # If the action is not a joint action, we just count all actions
             self._action_rate_max[:] = torch.maximum(self._action_rate_max, action_diff.max(dim=-1).values)
 
-        self._last_joint_vel = asset.data.joint_vel[:, self.cfg.params["asset_cfg"].joint_ids].detach().clone()
+        self._last_joint_vel = asset.data.joint_vel.torch[:, self.cfg.params["asset_cfg"].joint_ids].detach().clone()
 
     def reset_idx(self, env_ids: Sequence[int] | slice):
         """Nothing to do here."""
@@ -229,11 +237,11 @@ class ActuatorMonitorTerm(MonitorTerm):
 
     def update(self, dt: float):
         """Update the monitor term."""
-        self._joint_pos_cmd[:] = self.asset.data.joint_pos_target[:, self.asset_joint_ids].mean(dim=-1)
-        self._applied_torque[:] = self.asset.data.applied_torque[:, self.asset_joint_ids].mean(dim=-1)
-        self._computed_torque[:] = self.asset.data.computed_torque[:, self.asset_joint_ids].mean(dim=-1)
-        self._joint_pos_skeleton[:] = self.asset.data.joint_pos[:, self.asset_joint_ids].mean(dim=-1)
-        self._joint_vel[:] = self.asset.data.joint_vel[:, self.asset_joint_ids].mean(dim=-1)
+        self._joint_pos_cmd[:] = self.asset.data.joint_pos_target.torch[:, self.asset_joint_ids].mean(dim=-1)
+        self._applied_torque[:] = self.asset.data.applied_torque.torch[:, self.asset_joint_ids].mean(dim=-1)
+        self._computed_torque[:] = self.asset.data.computed_torque.torch[:, self.asset_joint_ids].mean(dim=-1)
+        self._joint_pos_skeleton[:] = self.asset.data.joint_pos.torch[:, self.asset_joint_ids].mean(dim=-1)
+        self._joint_vel[:] = self.asset.data.joint_vel.torch[:, self.asset_joint_ids].mean(dim=-1)
         self._joint_power[:] = (self._applied_torque * self._joint_vel).mean(dim=-1)
 
     def reset_idx(self, env_ids: Sequence[int] | slice):
@@ -273,7 +281,7 @@ class ContactForceMonitorTerm(MonitorTerm):
         self._force_max = torch.zeros(env.num_envs, dtype=torch.float32, device=self.device)
 
     def update(self, dt: float):
-        net_forces = self._contact_sensor.data.net_forces_w_history
+        net_forces = self._contact_sensor.data.net_forces_w_history.torch
         # net_forces shape: (num_envs, history_length, num_bodies, 3)
         force_norms = torch.norm(net_forces[:, :, self._body_ids], dim=-1)
         # max over history, then stats over selected bodies
@@ -314,26 +322,30 @@ class BodyStatMonitorTerm(MonitorTerm):
         asset = self._env.scene[self.cfg.params["asset_cfg"].name]
         self._body_acc[:] = (
             torch.norm(
-                asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids] - self._last_body_vel, dim=-1
+                asset.data.body_vel_w.torch[:, self.cfg.params["asset_cfg"].body_ids] - self._last_body_vel, dim=-1
             ).mean(dim=-1)
             / dt
         )
         self._body_acc_max[:] = torch.maximum(
             self._body_acc_max,
-            torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids] - self._last_body_vel, dim=-1)
+            torch.norm(
+                asset.data.body_vel_w.torch[:, self.cfg.params["asset_cfg"].body_ids] - self._last_body_vel, dim=-1
+            )
             .max(dim=-1)
             .values
             / dt,
         )
-        self._body_vel[:] = torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids], dim=-1).mean(
-            dim=-1
-        )
+        self._body_vel[:] = torch.norm(
+            asset.data.body_vel_w.torch[:, self.cfg.params["asset_cfg"].body_ids], dim=-1
+        ).mean(dim=-1)
         self._body_vel_max[:] = torch.maximum(
             self._body_vel_max,
-            torch.norm(asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids], dim=-1).max(dim=-1).values,
+            torch.norm(asset.data.body_vel_w.torch[:, self.cfg.params["asset_cfg"].body_ids], dim=-1)
+            .max(dim=-1)
+            .values,
         )
 
-        self._last_body_vel = asset.data.body_vel_w[:, self.cfg.params["asset_cfg"].body_ids].detach().clone()
+        self._last_body_vel = asset.data.body_vel_w.torch[:, self.cfg.params["asset_cfg"].body_ids].detach().clone()
 
     def reset_idx(self, env_ids: Sequence[int] | slice):
         """Nothing to do here."""
@@ -972,7 +984,7 @@ class ShadowingBasePosMonitorTerm(MonitorTerm):
         self._reference_base_pos = torch.zeros(self._env.num_envs, 3, dtype=torch.float32, device=self.device)
 
     def update(self, dt: float):
-        self._robot_base_pos[:] = self._robot.data.root_pos_w
+        self._robot_base_pos[:] = self._robot.data.root_pos_w.torch
         self._reference_base_pos[:] = self._motion_reference.reference_frame.base_pos_w[:, 0]
 
     def get_log(self, is_episode=False) -> dict[str, float | torch.Tensor]:
@@ -1018,12 +1030,12 @@ class ShadowingGravityMonitorTerm(MonitorTerm):
         )
 
         robot: Articulation = self._env.scene[self.cfg.params["robot_cfg"].name]
-        rot = robot.data.root_state_w[:, 3:7]
+        rot = robot.data.root_state_w.torch[:, 3:7]
         ref_rot = motion_reference.data.base_quat_w
         ref_rot = ref_rot[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
-        pg = math_utils.quat_apply_inverse(rot, robot.data.GRAVITY_VEC_W)
-        ref_pg = math_utils.quat_apply_inverse(ref_rot, robot.data.GRAVITY_VEC_W)
+        pg = math_utils.quat_apply_inverse(rot, robot.data.GRAVITY_VEC_W.torch)
+        ref_pg = math_utils.quat_apply_inverse(ref_rot, robot.data.GRAVITY_VEC_W.torch)
 
         if self.cfg.params.get("z_only", False):
             diff = (pg[:, 2] - ref_pg[:, 2]).abs()
@@ -1058,7 +1070,7 @@ class ShadowingGravityMonitorTerm(MonitorTerm):
 
 
 class BaseQuaternionMonitorTerm(MonitorTerm):
-    """Logs the robot's base quaternion (w, x, y, z) mean across environments."""
+    """Logs the robot's base quaternion (x, y, z, w) mean across environments."""
 
     def __init__(self, cfg: MonitorTermCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
@@ -1069,10 +1081,10 @@ class BaseQuaternionMonitorTerm(MonitorTerm):
         if is_episode:
             return {}
         asset: Articulation = self._env.scene[self.cfg.params["robot_cfg"].name]
-        quat = asset.data.root_quat_w
+        quat = asset.data.root_quat_w.torch
         return {
-            "w": quat[:, 0].mean().item(),
-            "x": quat[:, 1].mean().item(),
-            "y": quat[:, 2].mean().item(),
-            "z": quat[:, 3].mean().item(),
+            "x": quat[:, 0].mean().item(),
+            "y": quat[:, 1].mean().item(),
+            "z": quat[:, 2].mean().item(),
+            "w": quat[:, 3].mean().item(),
         }

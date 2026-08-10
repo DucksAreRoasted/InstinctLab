@@ -3,8 +3,6 @@ from __future__ import annotations
 import torch
 from typing import TYPE_CHECKING, Sequence
 
-import omni.physics.tensors.impl.api as physx
-
 import isaaclab.utils.math as math_utils
 from isaaclab.managers import ManagerTermBase, ObservationTermCfg, SceneEntityCfg
 
@@ -122,6 +120,8 @@ def root_tannorm_reference_as_state(
 class projected_gravity_reference_as_state(ManagerTermBase):
     def __init__(self, cfg: ObservationTermCfg, env: ManagerBasedEnv):
         super().__init__(cfg, env)
+        import omni.physics.tensors.api as physx
+
         self.motion_ref: MotionReferenceManager = (
             env.scene[cfg.params["asset_cfg"].name] if "asset_cfg" in cfg.params else env.scene["motion_reference"]
         )
@@ -175,7 +175,7 @@ def joint_pos_rel_reference_as_state(
     motion_reference: MotionReferenceManager = env.scene[asset_cfg.name]
     joint_pos = motion_reference.reference_frame.joint_pos[:, 0, asset_cfg.joint_ids]
     robot: Articulation = env.scene[robot_cfg.name]
-    joint_pos_rel = joint_pos - robot.data.default_joint_pos[:, asset_cfg.joint_ids]
+    joint_pos_rel = joint_pos - robot.data.default_joint_pos.torch[:, asset_cfg.joint_ids]
     return joint_pos_rel * motion_reference.reference_frame.joint_pos_mask[:, 0, asset_cfg.joint_ids]
 
 
@@ -241,7 +241,7 @@ def joint_vel_rel_reference_as_state(
     if mask:
         joint_vel *= motion_reference.reference_frame.joint_vel_mask[:, 0, asset_cfg.joint_ids]
     robot: Articulation = env.scene[robot_cfg.name]
-    joint_vel_rel = joint_vel - robot.data.default_joint_vel[:, asset_cfg.joint_ids]
+    joint_vel_rel = joint_vel - robot.data.default_joint_vel.torch[:, asset_cfg.joint_ids]
     return joint_vel_rel
 
 

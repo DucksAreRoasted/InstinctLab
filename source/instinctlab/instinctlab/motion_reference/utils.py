@@ -7,13 +7,13 @@ import torch
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.utils.math as math_utils
-from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 
 from instinctlab.utils.math import quat_angular_velocity, quat_slerp_batch
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation, RigidObject
+    from isaaclab.envs import ManagerBasedEnv
 
     from instinctlab.motion_reference import MotionReferenceManager
 
@@ -40,7 +40,7 @@ def get_base_position_distance(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the base position of the robot
-    base_pos = asset.data.root_pos_w
+    base_pos = asset.data.root_pos_w.torch
     # obtain the reference position
     ref_pos = motion_reference.data.base_pos_w
     ref_pos = ref_pos[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
@@ -82,7 +82,7 @@ def get_base_rotation_distance(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the base rotation of the robot
-    base_rot = asset.data.root_quat_w
+    base_rot = asset.data.root_quat_w.torch
     # obtain the reference rotation
     ref_rot = motion_reference.data.base_quat_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
@@ -121,14 +121,14 @@ def get_base_velocity_difference(
 
     if anchor_frame == "world":
         # obtain the base velocity of the robot in world frame
-        base_vel = asset.data.root_lin_vel_w
+        base_vel = asset.data.root_lin_vel_w.torch
         ref_base_vel = motion_reference.data.base_lin_vel_w[
             motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx
         ]
     elif anchor_frame == "robot":
         # obtain the base velocity of the robot in robot frame
-        base_vel = asset.data.root_lin_vel_b
-        anchor_quat = asset.data.root_quat_w
+        base_vel = asset.data.root_lin_vel_b.torch
+        anchor_quat = asset.data.root_quat_w.torch
         ref_base_vel = math_utils.quat_apply_inverse(
             anchor_quat,
             motion_reference.data.base_lin_vel_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx],
@@ -136,7 +136,7 @@ def get_base_velocity_difference(
     elif anchor_frame == "reference":
         # obtain the base velocity of the robot in reference frame
         anchor_quat = motion_reference.data.base_quat_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
-        base_vel = math_utils.quat_apply_inverse(anchor_quat, asset.data.root_lin_vel_w)
+        base_vel = math_utils.quat_apply_inverse(anchor_quat, asset.data.root_lin_vel_w.torch)
         ref_base_vel = math_utils.quat_apply_inverse(
             anchor_quat,
             motion_reference.data.base_lin_vel_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx],
@@ -168,7 +168,7 @@ def get_joint_position_difference(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the joint position of the robot
-    joint_pos = asset.data.joint_pos
+    joint_pos = asset.data.joint_pos.torch
     # obtain the reference joint position
     ref_joint_pos = motion_reference.data.joint_pos
     ref_joint_pos = ref_joint_pos[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
@@ -194,7 +194,7 @@ def get_joint_velocity_difference(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the joint velocity of the robot
-    joint_vel = asset.data.joint_vel
+    joint_vel = asset.data.joint_vel.torch
     # obtain the reference joint velocity
     ref_joint_vel = motion_reference.data.joint_vel
     ref_joint_vel = ref_joint_vel[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
@@ -230,9 +230,9 @@ def get_link_position_distance(
     # obtain the link position w.r.t the robot base
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)
     link_indices = links[0]
-    links_pos_w = asset.data.body_link_pos_w[:, link_indices]  # (batch_size, num_links, 3)
-    root_pos_w = asset.data.root_pos_w
-    root_quat_w = asset.data.root_quat_w
+    links_pos_w = asset.data.body_link_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
+    root_pos_w = asset.data.root_pos_w.torch
+    root_quat_w = asset.data.root_quat_w.torch
     root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
     if in_base_frame:
         links_pos = math_utils.transform_points(
@@ -286,15 +286,15 @@ def get_link_rotation_distance(
     link_indices = links[0]
 
     if in_base_frame:
-        links_rot_w = asset.data.body_link_quat_w[:, link_indices]
-        root_quat_w_inv = math_utils.quat_inv(asset.data.root_quat_w)
+        links_rot_w = asset.data.body_link_quat_w.torch[:, link_indices]
+        root_quat_w_inv = math_utils.quat_inv(asset.data.root_quat_w.torch)
         links_quat = math_utils.quat_mul(root_quat_w_inv.unsqueeze(-2).expand(-1, len(link_indices), -1), links_rot_w)
         links_quat_ref = motion_reference.data.link_quat_b[
             motion_reference.ALL_INDICES,
             motion_reference.aiming_frame_idx,
         ]
     else:
-        links_quat = asset.data.body_link_quat_w[:, link_indices]
+        links_quat = asset.data.body_link_quat_w.torch[:, link_indices]
         links_quat_ref = motion_reference.data.link_quat_w[
             motion_reference.ALL_INDICES,
             motion_reference.aiming_frame_idx,

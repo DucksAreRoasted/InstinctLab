@@ -1,13 +1,11 @@
 from dataclasses import MISSING
-from typing import Dict
 
 import isaaclab.sim as sim_utils
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.sensors import SensorBaseCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from .points_generator_cfg import PointsGeneratorCfg
-from .volume_points import VolumePoints
 
 VOLUME_POINTS_VISUALIZER_CFG = VisualizationMarkersCfg(
     prim_path="/Visuals/volumePoints",
@@ -28,20 +26,10 @@ VOLUME_POINTS_VISUALIZER_CFG = VisualizationMarkersCfg(
 class VolumePointsCfg(SensorBaseCfg):
     """Configuration for the volume points sensor."""
 
-    class_type: type = VolumePoints
+    class_type: type | str = "{DIR}.volume_points:VolumePoints"
 
-    filter_prim_paths_expr: list[str] = list()
-    """The list of primitive paths (or expressions) to filter volume points' body with. Defaults to an empty list,
-    in which case
-    no filtering is applied.
-
-    .. note::
-        The expression in the list can contain the environment namespace regex ``{ENV_REGEX_NS}`` which
-        will be replaced with the environment namespace.
-
-        Example: ``{ENV_REGEX_NS}/Object`` will be replaced with ``/World/envs/env_.*/Object``.
-
-    """
+    body_names_expr: str | list[str] = ".*"
+    """Body-name expressions selected recursively below :attr:`prim_path`."""
 
     points_generator: PointsGeneratorCfg = MISSING
     """ The points generator configuration. The generator function should be callable and accept only its cfg.

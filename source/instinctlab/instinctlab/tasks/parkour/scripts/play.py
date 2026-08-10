@@ -1,15 +1,11 @@
 """Script to play a checkpoint if an RL agent from Instinct-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
 import os
 import subprocess
 import sys
 
 sys.path.append(os.path.join(os.getcwd(), "scripts", "instinct_rl"))
-
-from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
@@ -39,35 +35,32 @@ parser.add_argument("--keyboard_angvel", type=float, default=1.0, help="Angular 
 
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
+# append simulation launcher cli args
+from isaaclab_tasks.utils import add_launcher_args  # isort: skip
+
+add_launcher_args(parser)
 args_cli = parser.parse_args()
+# TODO: Remove this workaround once Isaac Lab initializes `/isaaclab/has_gui` itself.
+# release/3.0.0-beta2 leaves it unset, preventing the Kit `IsaacLab` window and live monitors
+# from being created. This setting concerns the Kit GUI only, not the selected physics backend.
+if "kit" in (args_cli.visualizer or []):
+    args_cli.kit_args = f"{args_cli.kit_args} --/isaaclab/has_gui=true".strip()
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
-"""Rest everything follows."""
+if args_cli.keyboard_control and "kit" not in (args_cli.visualizer or []):
+    parser.error("--keyboard_control requires --viz kit so keyboard input is available.")
 
 import gymnasium as gym
 import torch
 
-import carb.input
-import omni.appwindow
-from carb.input import KeyboardEventType
 from instinct_rl.runners import OnPolicyRunner
 from instinct_rl.utils.utils import get_obs_slice, get_subobs_by_components, get_subobs_size
 
-from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import load_pickle, load_yaml
-from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
+from isaaclab.utils.io import load_yaml
+from isaaclab_tasks.utils import get_checkpoint_path, launch_simulation, parse_env_cfg
 
-# Import extensions to set up environment tasks
-from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
 from instinctlab.utils.wrappers.instinct_rl import InstinctRlOnPolicyRunnerCfg
 
 # wait for attach if in debug mode
@@ -115,7 +108,7 @@ def main():
         resume_path = "model_scratch.pt"
 
     if args_cli.env_cfg:
-        env_cfg = load_pickle(os.path.join(log_dir, "params", "env.pkl"))
+        env_cfg = load_yaml(os.path.join(log_dir, "params", "env.yaml"))
     if args_cli.agent_cfg:
         agent_cfg_dict = load_yaml(os.path.join(log_dir, "params", "agent.yaml"))
     else:
@@ -124,6 +117,24 @@ def main():
     if args_cli.keyboard_control:
         env_cfg.scene.num_envs = 1
         env_cfg.episode_length_s = 1e10
+
+    if args_cli.video:
+        env_cfg.video_recorder.backend_source = "visualizer"
+
+    with launch_simulation(env_cfg, args_cli):
+        return _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir, resume_path)
+
+
+def _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir: str, resume_path: str):
+    """Run Parkour policy inference inside an active simulation runtime."""
+    from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
+
+    from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
+
+    if args_cli.keyboard_control:
+        import carb.input
+        import omni.appwindow
+        from carb.input import KeyboardEventType
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -220,16 +231,17 @@ def main():
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
                 override_command[:] = 0.0
 
-    app_window = omni.appwindow.get_default_app_window()
-    keyboard = app_window.get_keyboard()
-    input = carb.input.acquire_input_interface()
-    input.subscribe_to_keyboard_events(keyboard, on_keyboard_input)
+    if args_cli.keyboard_control:
+        app_window = omni.appwindow.get_default_app_window()
+        keyboard = app_window.get_keyboard()
+        input_interface = carb.input.acquire_input_interface()
+        input_interface.subscribe_to_keyboard_events(keyboard, on_keyboard_input)
 
     # reset environment
     obs, _ = env.get_observations()
     timestep = 0
     # simulate environment
-    while simulation_app.is_running():
+    while True:
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
@@ -271,7 +283,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
-    simulation_app.close()

@@ -5,7 +5,7 @@ from .flat_env_cfg import G1FlatEnvCfg, G1FlatEnvCfg_PLAY
 
 gym.register(
     id="Instinct-Locomotion-Flat-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1FlatEnvCfg,
@@ -15,7 +15,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Locomotion-Flat-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1FlatEnvCfg_PLAY,

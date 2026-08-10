@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 from typing import TYPE_CHECKING, Sequence
 
-from isaacsim.core.utils.torch.maths import torch_rand_float
 from torchvision.transforms import GaussianBlur
 
 from instinctlab.utils.buffers import AsyncDelayBuffer
@@ -25,6 +24,10 @@ if TYPE_CHECKING:
         RandomGaussianNoiseCfg,
         SensorDeadNoiseCfg,
     )
+
+
+def _uniform_random(low: float, high: float, shape: tuple[int, ...], device: str | torch.device) -> torch.Tensor:
+    return torch.empty(shape, device=device).uniform_(low, high)
 
 
 class ImageNoiseModel:
@@ -167,12 +170,12 @@ def depth_stero_noise(
     near_mask = (~far_mask) & (~too_close_mask)
 
     # add noise to the fart points
-    far_noise = torch_rand_float(0.0, cfg.stero_far_noise_std, (N, H * W), device=device).view(N, H, W, 1)
+    far_noise = _uniform_random(0.0, cfg.stero_far_noise_std, (N, H * W), device=device).view(N, H, W, 1)
     far_noise = far_noise * far_mask
     data += far_noise
 
     # add noise to near points
-    near_noise = torch_rand_float(0.0, cfg.stero_near_noise_std, (N, H * W), device=device).view(N, H, W, 1)
+    near_noise = _uniform_random(0.0, cfg.stero_near_noise_std, (N, H * W), device=device).view(N, H, W, 1)
     near_noise = near_noise * near_mask
     data += near_noise
 
@@ -201,7 +204,7 @@ def depth_stero_noise(
         data[full_block_mask] = ((1 - artifacts_buffer) * pixel_value)[full_block_mask]
     # add artifacts where not all the same vertical pixels are too close
     half_block_spark = (
-        torch_rand_float(0.0, 1.0, (N, H * W), device=device).view(N, H, W, 1) < cfg.stero_half_block_spark_prob
+        _uniform_random(0.0, 1.0, (N, H * W), device=device).view(N, H, W, 1) < cfg.stero_half_block_spark_prob
     )
     data[half_block_mask] = (half_block_spark.to(torch.float32) * cfg.stero_half_block_value)[half_block_mask]
 
@@ -445,7 +448,7 @@ def _add_depth_artifacts(
         return torch.clip(data, 0.0, (H, W)[dim])
 
     # random patched artifacts
-    artifacts_mask = torch_rand_float(0.0, 1.0, (N, H * W), device=device).view(N, H, W) < artifacts_prob
+    artifacts_mask = _uniform_random(0.0, 1.0, (N, H * W), device=device).view(N, H, W) < artifacts_prob
     artifacts_mask = artifacts_mask & (data[:, :, :, 0] > 0.0)
     artifacts_coord = torch.nonzero(artifacts_mask).to(torch.float32)  # (n_, 3) n_ <= N * H * W
 
@@ -653,7 +656,7 @@ def stereo_too_close_noise(
 
     # add artifacts where not all the same vertical pixels are too close (half block)
     half_block_spark = (
-        torch_rand_float(
+        _uniform_random(
             0.0,
             1.0,
             (N, H * W),

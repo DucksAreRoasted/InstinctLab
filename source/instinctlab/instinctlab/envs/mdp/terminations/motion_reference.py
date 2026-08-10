@@ -174,7 +174,7 @@ def rot_far_from_ref(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # get the current rotation
-    rot = robot.data.root_state_w[:, 3:7]  # shape: [N, 4]
+    rot = robot.data.root_state_w.torch[:, 3:7]  # shape: [N, 4]
     ref_rot = motion_reference.data.base_quat_w  # shape: [N, n_frames, 4]
     ref_rot = ref_rot[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
@@ -208,12 +208,12 @@ def projected_gravity_far_from_ref(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # get the current rotation
-    rot = robot.data.root_state_w[:, 3:7]  # shape: [N, 4]
+    rot = robot.data.root_state_w.torch[:, 3:7]  # shape: [N, 4]
     ref_rot = motion_reference.data.base_quat_w  # shape: [N, n_frames, 4]
     ref_rot = ref_rot[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
-    pg = math_utils.quat_apply_inverse(rot, robot.data.GRAVITY_VEC_W)
-    ref_pg = math_utils.quat_apply_inverse(ref_rot, robot.data.GRAVITY_VEC_W)
+    pg = math_utils.quat_apply_inverse(rot, robot.data.GRAVITY_VEC_W.torch)
+    ref_pg = math_utils.quat_apply_inverse(ref_rot, robot.data.GRAVITY_VEC_W.torch)
 
     if z_only:
         diff = (pg[:, 2] - ref_pg[:, 2]).abs()

@@ -1,17 +1,28 @@
 """Script to play a checkpoint if an RL agent from Instinct-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
+import gymnasium as gym
+import os
 import subprocess
 import sys
+import torch
 
-from isaaclab.app import AppLauncher
+from instinct_rl.runners import OnPolicyRunner
+from instinct_rl.utils.loggings import pack_checkpoint_folder
+
+from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
+from isaaclab.utils.dict import print_dict, update_class_from_dict
+from isaaclab.utils.io import load_yaml
+from isaaclab_tasks.utils import add_launcher_args, get_checkpoint_path, launch_simulation
+from isaaclab_tasks.utils.hydra import hydra_task_config
+
+import instinctlab.tasks  # noqa: F401
+from instinctlab.utils.wrappers.instinct_rl.rl_cfg import InstinctRlOnPolicyRunnerCfg
 
 # local imports
 import cli_args  # isort: skip
 
-# add argparse arguments
+
 parser = argparse.ArgumentParser(description="Play an RL agent with Instinct-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=3000, help="Length of the recorded video (in steps).")
@@ -40,39 +51,23 @@ parser.add_argument(
 )
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
-args_cli = parser.parse_args()
+# append simulation launcher cli args
+add_launcher_args(parser)
+args_cli, hydra_args = parser.parse_known_args()
+
+# TODO: Remove this workaround once Isaac Lab initializes `/isaaclab/has_gui` itself.
+# release/3.0.0-beta2 leaves it unset, preventing the Kit `IsaacLab` window and live monitors
+# from being created. This setting concerns the Kit GUI only, not the selected physics backend.
+if "kit" in (args_cli.visualizer or []):
+    args_cli.kit_args = f"{args_cli.kit_args} --/isaaclab/has_gui=true".strip()
+
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
 
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
+# Hydra consumes only the arguments not handled above.
+sys.argv = [sys.argv[0]] + hydra_args
 
-"""Rest everything follows."""
-
-import gymnasium as gym
-import numpy as np
-import os
-import time
-import torch
-
-from instinct_rl.runners import OnPolicyRunner
-
-import isaaclab.utils.math as math_utils
-from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
-from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import load_yaml
-from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
-
-# Import extensions to set up environment tasks
-import instinctlab.tasks  # noqa: F401
-from instinct_rl.utils.loggings import pack_checkpoint_folder
-from instinctlab.managers.reward_manager import MultiRewardManager
-from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
-from instinctlab.utils.wrappers.instinct_rl import InstinctRlOnPolicyRunnerCfg
 
 # wait for attach if in debug mode
 if args_cli.debug:
@@ -87,13 +82,17 @@ if args_cli.debug:
     debugpy.breakpoint()
 
 
-def main():
-    """Play with Instinct-RL agent."""
-    # parse configuration
-    env_cfg = parse_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
-    )
-    agent_cfg: InstinctRlOnPolicyRunnerCfg = cli_args.parse_instinct_rl_cfg(args_cli.task, args_cli)
+@hydra_task_config(args_cli.task, "instinct_rl_cfg_entry_point")
+def main(
+    env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg,
+    agent_cfg: InstinctRlOnPolicyRunnerCfg,
+):
+    """Launch the configured simulator and play an Instinct-RL policy."""
+    agent_cfg = cli_args.update_instinct_rl_cfg(agent_cfg, args_cli)
+    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    env_cfg.seed = agent_cfg.seed
+    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    env_cfg.sim.use_fabric = not args_cli.disable_fabric
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "instinct_rl", agent_cfg.experiment_name)
@@ -119,11 +118,22 @@ def main():
         resume_path = "model_scratch.pt"
 
     if args_cli.env_cfg:
-        env_cfg = load_yaml(os.path.join(log_dir, "params", "env.yaml"))
+        update_class_from_dict(env_cfg, load_yaml(os.path.join(log_dir, "params", "env.yaml")))
     if args_cli.agent_cfg:
         agent_cfg_dict = load_yaml(os.path.join(log_dir, "params", "agent.yaml"))
     else:
         agent_cfg_dict = agent_cfg.to_dict()
+    env_cfg.log_dir = log_dir
+
+    with launch_simulation(env_cfg, args_cli):
+        return _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir, resume_path)
+
+
+def _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir: str, resume_path: str):
+    """Run Instinct-RL policy inference inside an active simulation runtime."""
+    from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
+
+    from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -169,7 +179,7 @@ def main():
     else:
         policy = ppo_runner.get_inference_policy(device=env.unwrapped.device)
 
-    # export policy to onnx/jit
+    # export policy to onnx
     if agent_cfg.load_run is not None:
         export_model_dir = os.path.join(log_dir, "exported")
         if args_cli.exportonnx:
@@ -190,7 +200,7 @@ def main():
     obs, _ = env.get_observations()
     timestep = 0
     # simulate environment
-    while simulation_app.is_running():
+    while True:
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
@@ -231,5 +241,3 @@ def main():
 if __name__ == "__main__":
     # run the main function
     main()
-    # close sim app
-    simulation_app.close()

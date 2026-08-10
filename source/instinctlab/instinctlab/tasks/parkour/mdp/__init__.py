@@ -1,9 +1,5 @@
-from isaaclab.envs.mdp import *  # noqa: F401, F403
+"""MDP terms specific to InstinctLab parkour tasks."""
 
-from instinctlab.envs.mdp import *  # noqa: F401, F403
+from isaaclab.utils.module import lazy_export
 
-from .commands import *  # noqa: F401, F403
-from .curriculums import *  # noqa: F401, F403
-from .events import *  # noqa: F401, F403
-from .rewards import *  # noqa: F401, F403
-from .terminations import *  # noqa: F401, F403
+lazy_export()

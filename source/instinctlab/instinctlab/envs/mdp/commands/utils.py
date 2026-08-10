@@ -7,13 +7,13 @@ import torch
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.utils.math as math_utils
-from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import SceneEntityCfg
 
 import instinctlab.utils.math as instinct_math_utils
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation, RigidObject
+    from isaaclab.envs import ManagerBasedRLEnv
 
     from instinctlab.envs.mdp import (
         JointPosRefCommand,
@@ -41,7 +41,7 @@ def get_joint_pos_diff_to_cmd(
     asset: Articulation = env.scene[asset_cfg.name]
 
     # obtain the joint position of the robot
-    joint_pos = asset.data.joint_pos
+    joint_pos = asset.data.joint_pos.torch
     # obtain the reference joint position from the command
     ref_joint_pos = command_term.command[command_term.ALL_INDICES, command_term.aiming_frame_idx]
 
@@ -65,7 +65,7 @@ def get_joint_vel_diff_to_cmd(
     asset: Articulation = env.scene[asset_cfg.name]
 
     # obtain the joint velocity of the robot
-    joint_vel = asset.data.joint_vel
+    joint_vel = asset.data.joint_vel.torch
     # obtain the reference joint velocity from the command
     ref_joint_vel = command_term.command[command_term.ALL_INDICES, command_term.aiming_frame_idx]
 
@@ -93,9 +93,9 @@ def get_link_pos_diff_to_cmd(
     link_indices = links[0]
 
     # obtain the link position of the robot
-    link_pos_w = asset.data.body_pos_w[:, link_indices]  # (batch_size, num_links, 3)
-    root_pos_w = asset.data.root_pos_w
-    root_quat_w = asset.data.root_quat_w
+    link_pos_w = asset.data.body_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
+    root_pos_w = asset.data.root_pos_w.torch
+    root_quat_w = asset.data.root_quat_w.torch
     root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
     link_pos = math_utils.transform_points(
         link_pos_w,
@@ -127,7 +127,7 @@ def get_link_rot_diff_mag_to_cmd(
     link_indices = links[0]
 
     # obtain the link rotation of the robot
-    link_rot = asset.data.body_quat_w  # (batch_size, num_all_links, 4)
+    link_rot = asset.data.body_quat_w.torch  # (batch_size, num_all_links, 4)
     link_rot = link_rot[:, link_indices, :]  # (batch_size, num_links, 4)
     # obtain the reference link rotation from the command
     ref_link_rot = command_term.command[command_term.ALL_INDICES, command_term.aiming_frame_idx]

@@ -6,14 +6,13 @@ from collections.abc import Sequence
 from copy import copy
 from typing import TYPE_CHECKING, Callable
 
-import omni.log as omni_log
-import omni.physics.tensors.impl.api as physx
-
 import isaaclab.utils.math as math_utils
 
 from .motion_reference_data import MotionReferenceData, MotionReferenceState
 
 if TYPE_CHECKING:
+    import omni.physics.tensors.api as physx
+
     from isaaclab.scene import InteractiveScene
     from .motion_reference_cfg import MotionBufferCfg
 

@@ -4,13 +4,13 @@ import torch
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.utils.math as math_utils
-from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
 
 import instinctlab.motion_reference.utils as motion_reference_utils
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation, RigidObject
+    from isaaclab.envs import ManagerBasedRLEnv
 
     from instinctlab.motion_reference import MotionReferenceManager
 
@@ -110,7 +110,7 @@ def base_position_imitation_gauss(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
     robot: Articulation = env.scene[asset_cfg.name]
     base_pos_ref = motion_reference.reference_frame.base_pos_w[:, 0]  # (batch_size, 3)
-    base_pos = robot.data.root_pos_w  # (batch_size, 3)
+    base_pos = robot.data.root_pos_w.torch  # (batch_size, 3)
     base_pos_diff = base_pos - base_pos_ref  # (batch_size, 3)
     rewards = torch.exp(-torch.sum(torch.square(base_pos_diff), dim=-1) / (std * std))  # (batch_size,)
     # Apply validity mask from the reference frame
@@ -134,8 +134,8 @@ class base_position_offset_imitation_gauss(ManagerTermBase):
         self.asset = self._env.scene[self.asset_cfg.name]
         self.reference_cfg = self.cfg.params.get("reference_cfg", SceneEntityCfg("motion_reference"))
         self.motion_reference: MotionReferenceManager = self._env.scene[self.reference_cfg.name]
-        self.asset_position_marker = torch.ones_like(self.asset.data.root_pos_w) * torch.nan  # (batch_size, 3)
-        self.asset_quat_marker = torch.ones_like(self.asset.data.root_quat_w) * torch.nan  # (batch_size, 4)
+        self.asset_position_marker = torch.ones_like(self.asset.data.root_pos_w.torch) * torch.nan  # (batch_size, 3)
+        self.asset_quat_marker = torch.ones_like(self.asset.data.root_quat_w.torch) * torch.nan  # (batch_size, 4)
         self.reference_position_marker = (
             torch.ones_like(self.motion_reference.reference_frame.base_pos_w[:, 0]) * torch.nan
         )  # (batch_size, 3)
@@ -161,7 +161,7 @@ class base_position_offset_imitation_gauss(ManagerTermBase):
 
     def compute_base_position_offset(self, in_base_frame: bool):
         """compute the base position offset"""
-        asset_pos_offset = self.asset.data.root_pos_w - self.asset_position_marker  # (batch_size, 3)
+        asset_pos_offset = self.asset.data.root_pos_w.torch - self.asset_position_marker  # (batch_size, 3)
         reference_pos_offset = (
             self.motion_reference.reference_frame.base_pos_w[:, 0] - self.reference_position_marker
         )  # (batch_size, 3)
@@ -178,8 +178,8 @@ class base_position_offset_imitation_gauss(ManagerTermBase):
 
     def refresh_markers(self):
         landmarker_refresh_mask = self.motion_reference.time_passed_from_update < self._env.step_dt  # (batch_size, 1)
-        self.asset_position_marker[landmarker_refresh_mask] = self.asset.data.root_pos_w[landmarker_refresh_mask]
-        self.asset_quat_marker[landmarker_refresh_mask] = self.asset.data.root_quat_w[landmarker_refresh_mask]
+        self.asset_position_marker[landmarker_refresh_mask] = self.asset.data.root_pos_w.torch[landmarker_refresh_mask]
+        self.asset_quat_marker[landmarker_refresh_mask] = self.asset.data.root_quat_w.torch[landmarker_refresh_mask]
         self.reference_position_marker[landmarker_refresh_mask] = self.motion_reference.reference_frame.base_pos_w[
             landmarker_refresh_mask
         ][:, 0]
@@ -236,10 +236,10 @@ def base_velocity_imitation_gauss(
             root_quat_w,
             base_vel_ref_w,
         )
-        base_vel = asset.data.root_lin_vel_b  # (batch_size, 3)
+        base_vel = asset.data.root_lin_vel_b.torch  # (batch_size, 3)
     else:
         base_vel_ref = base_vel_ref_w
-        base_vel = asset.data.root_lin_vel_w  # (batch_size, 3)
+        base_vel = asset.data.root_lin_vel_w.torch  # (batch_size, 3)
     base_vel_diff = base_vel - base_vel_ref  # (batch_size, 3)
 
     rewards = torch.exp(-torch.sum(torch.square(base_vel_diff), dim=-1) / (std * std))
@@ -267,10 +267,10 @@ def base_velocity_imitation_square(
             motion_reference.reference_frame.base_quat_w[:, 0],
             motion_reference.reference_frame.base_lin_vel_w[:, 0],  # (batch_size, 3)
         )
-        base_vel = asset.data.root_lin_vel_b  # (batch_size, 3)
+        base_vel = asset.data.root_lin_vel_b.torch  # (batch_size, 3)
     else:
         base_vel_ref = motion_reference.reference_frame.base_lin_vel_w[:, 0]  # (batch_size, 3)
-        base_vel = asset.data.root_lin_vel_w  # (batch_size, 3)
+        base_vel = asset.data.root_lin_vel_w.torch  # (batch_size, 3)
     base_vel_diff = base_vel - base_vel_ref  # (batch_size, 3)
 
     rewards = torch.sum(torch.square(base_vel_diff), dim=-1)  # (batch_size,)
@@ -290,7 +290,7 @@ def base_rot_tracking_cos(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the robot rotation and reference rotation
-    quat = asset.data.root_state_w[:, 3:7]
+    quat = asset.data.root_state_w.torch[:, 3:7]
     quat_ref = motion_reference.data.base_quat_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
     # compute the cosine difference
@@ -324,7 +324,7 @@ def base_rot_tracking_gauss(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the robot rotation and reference rotation
-    quat = asset.data.root_state_w[:, 3:7]
+    quat = asset.data.root_state_w.torch[:, 3:7]
     quat_ref = motion_reference.data.base_quat_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
 
     # quaternion to euler
@@ -361,7 +361,7 @@ def base_rot_imitation_gauss(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
     asset: RigidObject = env.scene[asset_cfg.name]
     quat_ref = motion_reference.reference_frame.base_quat_w[:, 0]  # (batch_size, 4)
-    quat = asset.data.root_quat_w  # (batch_size, 4)
+    quat = asset.data.root_quat_w.torch  # (batch_size, 4)
     if difference_type == "axis_angle":
         quat_diff = math_utils.quat_mul(quat_ref, math_utils.quat_conjugate(quat))  # (batch_size, 4)
         axisang = math_utils.axis_angle_from_quat(quat_diff)  # (batch_size, 3)
@@ -393,7 +393,7 @@ def base_rot_imitation_square(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
     asset: RigidObject = env.scene[asset_cfg.name]
     quat_ref = motion_reference.reference_frame.base_quat_w[:, 0]  # (batch_size, 4)
-    quat = asset.data.root_quat_w  # (batch_size, 4)
+    quat = asset.data.root_quat_w.torch  # (batch_size, 4)
     if difference_type == "axis_angle":
         rot_error = math_utils.quat_error_magnitude(quat_ref.reshape(-1, 4), quat.reshape(-1, 4))
     elif difference_type == "box_minus":
@@ -433,9 +433,9 @@ def base_projected_gravity_tracking_gauss(
     motion_reference: MotionReferenceManager = env.scene[reference_cfg.name]
 
     # obtain the robot rotation and reference rotation
-    quat = asset.data.root_state_w[:, 3:7]
+    quat = asset.data.root_state_w.torch[:, 3:7]
     quat_ref = motion_reference.data.base_quat_w[motion_reference.ALL_INDICES, motion_reference.aiming_frame_idx]
-    GRAVITY_VEC_W = asset.data.GRAVITY_VEC_W
+    GRAVITY_VEC_W = asset.data.GRAVITY_VEC_W.torch
     projected_gravity = math_utils.quat_apply_inverse(
         quat, GRAVITY_VEC_W
     )  # (num_envs, 3), projected gravity in the robot's local frame
@@ -608,7 +608,7 @@ def joint_pos_imitation_gauss(
     robot: Articulation = env.scene[asset_cfg.name]
     joint_pos_ids = asset_cfg.joint_ids
     joint_pos_ref = motion_reference.reference_frame.joint_pos[:, 0, joint_pos_ids]  # (batch_size, num_joints_selected)
-    joint_pos = robot.data.joint_pos[:, joint_pos_ids]  # (batch_size, num_joints_selected)
+    joint_pos = robot.data.joint_pos.torch[:, joint_pos_ids]  # (batch_size, num_joints_selected)
     joint_pos_diff = joint_pos - joint_pos_ref  # (batch_size, num_joints_selected)
     joint_pos_square = torch.square(joint_pos_diff)
 
@@ -651,7 +651,7 @@ def joint_pos_imitation_square(
     robot: Articulation = env.scene[asset_cfg.name]
     joint_pos_ids = asset_cfg.joint_ids
     joint_pos_ref = motion_reference.reference_frame.joint_pos[:, 0, joint_pos_ids]  # (batch_size, num_joints_selected)
-    joint_pos = robot.data.joint_pos[:, joint_pos_ids]  # (batch_size, num_joints_selected)
+    joint_pos = robot.data.joint_pos.torch[:, joint_pos_ids]  # (batch_size, num_joints_selected)
     joint_pos_diff = joint_pos - joint_pos_ref  # (batch_size, num_joints_selected)
     if masked:
         joint_pos_mask = motion_reference.reference_frame.joint_pos_mask[:, 0, joint_pos_ids]
@@ -684,7 +684,7 @@ def joint_vel_imitation_gauss(
     robot: Articulation = env.scene[asset_cfg.name]
     joint_vel_ids = asset_cfg.joint_ids
     joint_vel_ref = motion_reference.reference_frame.joint_vel[:, 0, joint_vel_ids]  # (batch_size, num_joints_selected)
-    joint_vel = robot.data.joint_vel[:, joint_vel_ids]  # (batch_size, num_joints_selected)
+    joint_vel = robot.data.joint_vel.torch[:, joint_vel_ids]  # (batch_size, num_joints_selected)
     joint_vel_diff = joint_vel - joint_vel_ref  # (batch_size, num_joints_selected)
     joint_vel_square = torch.square(joint_vel_diff)  # (batch_size, num_joints_selected)
     if masked:
@@ -726,7 +726,7 @@ def joint_vel_imitation_square(
     robot: Articulation = env.scene[asset_cfg.name]
     joint_vel_ids = asset_cfg.joint_ids
     joint_vel_ref = motion_reference.reference_frame.joint_vel[:, 0, joint_vel_ids]  # (batch_size, num_joints_selected)
-    joint_vel = robot.data.joint_vel[:, joint_vel_ids]  # (batch_size, num_joints_selected)
+    joint_vel = robot.data.joint_vel.torch[:, joint_vel_ids]  # (batch_size, num_joints_selected)
     joint_vel_diff = joint_vel - joint_vel_ref  # (batch_size, num_joints_selected)
     if masked:
         joint_vel_mask = motion_reference.reference_frame.joint_vel_mask[:, 0, joint_vel_ids]
@@ -907,10 +907,10 @@ def link_pos_imitation_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)
     link_indices = links[0]
-    links_pos_w = asset.data.body_link_pos_w[:, link_indices]  # (batch_size, num_links, 3)
+    links_pos_w = asset.data.body_link_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
     if in_base_frame:
-        root_pos_w = asset.data.root_pos_w
-        root_quat_w = asset.data.root_quat_w
+        root_pos_w = asset.data.root_pos_w.torch
+        root_quat_w = asset.data.root_quat_w.torch
         root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
         links_pos = math_utils.transform_points(
             links_pos_w,
@@ -972,10 +972,10 @@ def link_pos_imitation_square(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)
     link_indices = links[0]
-    links_pos_w = asset.data.body_link_pos_w[:, link_indices]  # (batch_size, num_links, 3)
+    links_pos_w = asset.data.body_link_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
     if in_base_frame:
-        root_pos_w = asset.data.root_pos_w
-        root_quat_w = asset.data.root_quat_w
+        root_pos_w = asset.data.root_pos_w.torch
+        root_quat_w = asset.data.root_quat_w.torch
         root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
         links_pos = math_utils.transform_points(
             links_pos_w,
@@ -1010,10 +1010,10 @@ def link_pos_imitation_neg_log(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)
     link_indices = links[0]
-    links_pos_w = asset.data.body_link_pos_w[:, link_indices]  # (batch_size, num_links, 3)
+    links_pos_w = asset.data.body_link_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
     if in_base_frame:
-        root_pos_w = asset.data.root_pos_w
-        root_quat_w = asset.data.root_quat_w
+        root_pos_w = asset.data.root_pos_w.torch
+        root_quat_w = asset.data.root_quat_w.torch
         root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
         links_pos = math_utils.transform_points(
             links_pos_w,
@@ -1064,9 +1064,9 @@ def link_rot_imitation_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)  # type: ignore
     link_indices = links[0]
-    links_rot_w = asset.data.body_link_quat_w[:, link_indices]  # (batch_size, num_links, 4)
+    links_rot_w = asset.data.body_link_quat_w.torch[:, link_indices]  # (batch_size, num_links, 4)
     if in_base_frame:
-        root_quat_w = asset.data.root_quat_w
+        root_quat_w = asset.data.root_quat_w.torch
         root_quat_w_inv = math_utils.quat_inv(root_quat_w)  # (batch_size, 4)
         link_rot = math_utils.quat_mul(root_quat_w_inv.unsqueeze(1).expand(-1, links_rot_w.shape[1], -1), links_rot_w)
         link_rot_ref = motion_reference.reference_frame.link_quat_b[:, 0]
@@ -1130,13 +1130,13 @@ def link_lin_vel_imitation_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)  # type: ignore
     link_indices = links[0]
-    links_lin_vel_w = asset.data.body_link_lin_vel_w[:, link_indices]  # (batch_size, num_links, 3)
+    links_lin_vel_w = asset.data.body_link_lin_vel_w.torch[:, link_indices]  # (batch_size, num_links, 3)
     if in_base_frame:
-        root_pos_w = asset.data.root_pos_w
-        root_quat_w = asset.data.root_quat_w
-        root_lin_vel_w = asset.data.root_lin_vel_w
-        root_ang_vel_w = asset.data.root_ang_vel_w
-        links_pos_w = asset.data.body_link_pos_w[:, link_indices]  # (batch_size, num_links, 3)
+        root_pos_w = asset.data.root_pos_w.torch
+        root_quat_w = asset.data.root_quat_w.torch
+        root_lin_vel_w = asset.data.root_lin_vel_w.torch
+        root_ang_vel_w = asset.data.root_ang_vel_w.torch
+        links_pos_w = asset.data.body_link_pos_w.torch[:, link_indices]  # (batch_size, num_links, 3)
         link_pos_offset_w = links_pos_w - root_pos_w.unsqueeze(1)  # (batch_size, num_links, 3)
         link_lin_vel = math_utils.quat_apply_inverse(
             root_quat_w.unsqueeze(1).expand(-1, links_lin_vel_w.shape[1], -1),
@@ -1199,10 +1199,10 @@ def link_ang_vel_imitation_gauss(
     asset: Articulation = env.scene[asset_cfg.name]
     links = asset.find_bodies(motion_reference.cfg.link_of_interests, preserve_order=True)  # type: ignore
     link_indices = links[0]
-    links_ang_vel_w = asset.data.body_link_ang_vel_w[:, link_indices]  # (batch_size, num_links, 3)
+    links_ang_vel_w = asset.data.body_link_ang_vel_w.torch[:, link_indices]  # (batch_size, num_links, 3)
     if in_base_frame:
-        root_quat_w = asset.data.root_quat_w
-        root_ang_vel_w = asset.data.root_ang_vel_w
+        root_quat_w = asset.data.root_quat_w.torch
+        root_ang_vel_w = asset.data.root_ang_vel_w.torch
         link_ang_vel = math_utils.quat_apply_inverse(
             root_quat_w.unsqueeze(1).expand(-1, links_ang_vel_w.shape[1], -1),
             links_ang_vel_w - root_ang_vel_w.unsqueeze(1),

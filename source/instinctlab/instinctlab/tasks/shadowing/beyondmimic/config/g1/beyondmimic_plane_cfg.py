@@ -4,7 +4,7 @@ import yaml
 import isaaclab.envs.mdp as mdp
 from isaaclab.envs import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.beyondmimic.beyondmimic_env_cfg as beyondmimic_cfg
@@ -16,13 +16,9 @@ from instinctlab.assets.unitree_g1 import (
     G1_29DOF_TORSOBASE_POPSICLE_CFG,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
+    configure_g1_29dof_policy_io,
 )
-from instinctlab.monitors import (
-    ActuatorMonitorTerm,
-    MonitorTermCfg,
-    RewardSumMonitorTerm,
-    ShadowingJointReferenceMonitorTerm,
-)
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.aistpp_motion_cfg import AistppMotionCfg as AistppMotionCfgBase
 from instinctlab.motion_reference.motion_files.amass_motion_cfg import AmassMotionCfg as AmassMotionCfgBase
@@ -65,9 +61,9 @@ class AmassMotionCfg(AmassMotionCfgBase):
 
 
 motion_reference_cfg = MotionReferenceManagerCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    robot_model_path=G1_CFG.spawn.asset_path,
-    reference_prim_path="/World/envs/env_.*/RobotReference/torso_link",
+    prim_path="{ENV_REGEX_NS}/Robot",
+    robot_model_path=G1_CFG.spawn.source_urdf_path,
+    reference_prim_path="/World/envs/env_.*/RobotReference",
     link_of_interests=[
         "pelvis",
         "torso_link",
@@ -111,6 +107,7 @@ class G1BeyondMimicPlaneEnvCfg(beyondmimic_cfg.BeyondMimicEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        configure_g1_29dof_policy_io(self)
 
         # add link_of_interests to the policy observation
         if self.observations.policy.__dict__.get("link_pos", None) is not None:
@@ -171,9 +168,10 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
             debug_vis=True,
         ),
     )
+
     viewer: ViewerCfg = ViewerCfg(
-        eye=[4.0, 0.75, 1.0],
-        lookat=[0.0, 0.75, 0.0],
+        eye=(4.0, 0.75, 1.0),
+        lookat=(0.0, 0.75, 0.0),
         origin_type="asset_root",
         asset_name="robot",
     )
@@ -214,7 +212,7 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
 
         # add PLAY-specific monitor term
         self.monitors.shoulder_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params={
                 "asset_cfg": SceneEntityCfg(name="robot", joint_names="left_shoulder_roll.*"),
                 "torque_plot_scale": 1e-2,
@@ -222,7 +220,7 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
             },
         )
         self.monitors.waist_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params={
                 "asset_cfg": SceneEntityCfg(name="robot", joint_names="waist_roll.*"),
                 "torque_plot_scale": 1e-2,
@@ -230,7 +228,7 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
             },
         )
         self.monitors.knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params={
                 "asset_cfg": SceneEntityCfg(name="robot", joint_names="left_knee.*"),
                 "torque_plot_scale": 1e-2,
@@ -238,10 +236,10 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
             },
         )
         self.monitors.reward_sum = MonitorTermCfg(
-            func=RewardSumMonitorTerm,
+            func="instinctlab.monitors.monitors:RewardSumMonitorTerm",
         )
         self.monitors.reference_stat_case = MonitorTermCfg(
-            func=ShadowingJointReferenceMonitorTerm,
+            func="instinctlab.monitors.monitors:ShadowingJointReferenceMonitorTerm",
             params=dict(
                 reference_cfg=SceneEntityCfg(
                     "motion_reference",

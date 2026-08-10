@@ -1,0 +1,1 @@
+from .contact_sensor_cfg import HierarchicalContactSensorCfg as HierarchicalContactSensorCfg

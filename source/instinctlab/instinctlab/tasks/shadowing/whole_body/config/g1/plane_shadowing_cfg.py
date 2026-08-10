@@ -14,7 +14,7 @@ from isaaclab.managers import CurriculumTermCfg
 from isaaclab.managers import RewardTermCfg as RewTermCfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTermCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.mdp as shadowing_mdp
@@ -29,15 +29,10 @@ from instinctlab.assets.unitree_g1 import (
     G1_29Dof_TorsoBase_symmetric_augmentation_joint_reverse_buf,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
+    configure_g1_29dof_policy_io,
 )
 from instinctlab.managers import MultiRewardCfg
-from instinctlab.monitors import (
-    ActuatorMonitorTerm,
-    MonitorTermCfg,
-    RewardSumMonitorTerm,
-    ShadowingBasePosMonitorTerm,
-    ShadowingJointReferenceMonitorTerm,
-)
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.aistpp_motion_cfg import AistppMotionCfg as AistppMotionCfgBase
 from instinctlab.motion_reference.motion_files.amass_motion_cfg import AmassMotionCfg as AmassMotionCfgBase
@@ -199,9 +194,9 @@ class AmassMotionCfg(AmassMotionCfgBase):
 
 
 motion_reference_cfg = MotionReferenceManagerCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    robot_model_path=G1_CFG.spawn.asset_path,
-    reference_prim_path="/World/envs/env_.*/RobotReference/torso_link",
+    prim_path="{ENV_REGEX_NS}/Robot",
+    robot_model_path=G1_CFG.spawn.source_urdf_path,
+    reference_prim_path="/World/envs/env_.*/RobotReference",
     link_of_interests=[
         "pelvis",
         "torso_link",
@@ -285,6 +280,7 @@ class G1PlaneShadowingEnvCfg(shadowing_cfg.ShadowingEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        configure_g1_29dof_policy_io(self)
 
         # add link_of_interests to the policy observation
         if self.observations.policy.__dict__.get("link_pos", None) is not None:
@@ -413,9 +409,10 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
             # },
         ),
     )
+
     viewer: ViewerCfg = ViewerCfg(
-        eye=[4.0, 0.75, 1.0],
-        lookat=[0.0, 0.75, 0.0],
+        eye=(4.0, 0.75, 1.0),
+        lookat=(0.0, 0.75, 0.0),
         origin_type="asset_root",
         asset_name="robot",
     )
@@ -455,7 +452,7 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
 
         # add PLAY-specific monitor term
         # self.monitors.shoulder_actuator = MonitorTermCfg(
-        #     func=ActuatorMonitorTerm,
+        #     func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
         #     params={
         #         "asset_cfg": SceneEntityCfg(name="robot", joint_names="left_shoulder_roll.*"),
         #         "torque_plot_scale": 1e-2,
@@ -464,7 +461,7 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
         #     },
         # )
         # self.monitors.waist_actuator = MonitorTermCfg(
-        #     func=ActuatorMonitorTerm,
+        #     func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
         #     params={
         #         "asset_cfg": SceneEntityCfg(name="robot", joint_names="waist_roll.*"),
         #         "torque_plot_scale": 1e-2,
@@ -473,7 +470,7 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
         #     },
         # )
         # self.monitors.knee_actuator = MonitorTermCfg(
-        #     func=ActuatorMonitorTerm,
+        #     func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
         #     params={
         #         "asset_cfg": SceneEntityCfg(name="robot", joint_names="left_knee.*"),
         #         "torque_plot_scale": 1e-2,
@@ -482,10 +479,10 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
         #     },
         # )
         # self.monitors.reward_sum = MonitorTermCfg(
-        #     func=RewardSumMonitorTerm,
+        #     func="instinctlab.monitors.monitors:RewardSumMonitorTerm",
         # )
         # self.monitors.reference_stat_case = MonitorTermCfg(
-        #     func=ShadowingJointReferenceMonitorTerm,
+        #     func="instinctlab.monitors.monitors:ShadowingJointReferenceMonitorTerm",
         #     params=dict(
         #         reference_cfg=SceneEntityCfg(
         #             "motion_reference",
@@ -496,7 +493,7 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
         #     ),
         # )
         # self.monitors.shadowing_base_pos = MonitorTermCfg(
-        #     func=ShadowingBasePosMonitorTerm,
+        #     func="instinctlab.monitors.monitors:ShadowingBasePosMonitorTerm",
         #     params=dict(
         #         robot_cfg=SceneEntityCfg("robot"),
         #         motion_reference_cfg=SceneEntityCfg("motion_reference"),

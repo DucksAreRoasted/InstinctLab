@@ -91,67 +91,103 @@ def points_penetrate_cylinder_kernel(
 
 
 @wp.kernel(enable_backward=False)
-def raycast_mesh_kernel_grouped_transformed(
-    mesh_wp_ids: wp.array(dtype=wp.uint64),  # all meshes in the scene
-    mesh_transforms: wp.array(dtype=wp.transform),  # transforms of the meshes
-    mesh_inv_transforms: wp.array(dtype=wp.transform),  # inverse transforms of the meshes
-    ray_collision_groups: wp.array(dtype=wp.int32),
-    mesh_idxs_for_group: wp.array(dtype=wp.int32),
-    meah_idxs_slice_for_group: wp.array(
-        dtype=wp.int32
-    ),  # Given the ray collision group (i), mesh_idxs_for_group[meah_idxs_slice_for_group[i]:meah_idxs_slice_for_group[i+1]] are the mesh ids within this group.
-    ray_starts: wp.array(dtype=wp.vec3),
-    ray_directions: wp.array(dtype=wp.vec3),
-    ray_hits: wp.array(dtype=wp.vec3),
-    ray_distance: wp.array(dtype=wp.float32),
-    ray_normal: wp.array(dtype=wp.vec3),
-    ray_face_id: wp.array(dtype=wp.int32),
-    ray_mesh_id: wp.array(dtype=wp.int16),
-    max_dist: float = 1e6,
-    min_dist: float = 0.0,
-    return_distance: int = False,
-    return_normal: int = False,
-    return_face_id: int = False,
-    return_mesh_id: int = False,
+def copy_flat_mesh_transforms_kernel(
+    source_transforms: wp.array(dtype=wp.transformf),
+    entity_indices: wp.array(dtype=wp.int32),
+    num_entities: int,
+    mesh_positions: wp.array(dtype=wp.vec3f),
+    mesh_rotations: wp.array(dtype=wp.quatf),
 ):
-    tid = wp.tid()
-    t = float(0.0)  # hit distance along ray
-    u = float(0.0)  # hit face barycentric u
-    v = float(0.0)  # hit face barycentric v
-    sign = float(0.0)  # hit face sign
-    n = wp.vec3()  # hit face normal
-    f = int(0)  # hit face index
+    """Copy a tracked physics view into indexed flat mesh-entity records."""
+    view_index = wp.tid()
+    entity_index = entity_indices[view_index]
+    if entity_index < 0 or entity_index >= num_entities:
+        return
 
-    ray_distance_buf = float(max_dist)
-    ray_collision_group = int(ray_collision_groups[tid])
-    start = ray_starts[tid]
-    direction = ray_directions[tid]
+    transform = source_transforms[view_index]
+    mesh_positions[entity_index] = wp.transform_get_translation(transform)
+    mesh_rotations[entity_index] = wp.transform_get_rotation(transform)
 
-    for idx in range(
-        meah_idxs_slice_for_group[ray_collision_group], meah_idxs_slice_for_group[ray_collision_group + 1]
-    ):
-        mesh_idx = int(mesh_idxs_for_group[idx])
-        mesh_wp_id = mesh_wp_ids[mesh_idx]
 
-        # transform the ray start and direction to the mesh's local space
-        mesh_transform = mesh_transforms[mesh_idx]
-        mesh_inv_transform = mesh_inv_transforms[mesh_idx]
-        start_local = wp.transform_point(mesh_inv_transform, start)
-        direction_local = wp.transform_vector(mesh_inv_transform, direction)
+@wp.kernel(enable_backward=False)
+def raycast_flat_mesh_groups_min_distance_kernel(
+    env_mask: wp.array(dtype=wp.bool),
+    ray_world_ids: wp.array2d(dtype=wp.int32),
+    world_mesh_indices: wp.array(dtype=wp.int32),
+    world_mesh_offsets: wp.array(dtype=wp.int32),
+    meshes: wp.array(dtype=wp.uint64),
+    ray_starts: wp.array2d(dtype=wp.vec3f),
+    ray_directions: wp.array2d(dtype=wp.vec3f),
+    ray_hits: wp.array2d(dtype=wp.vec3f),
+    ray_distance: wp.array2d(dtype=wp.float32),
+    ray_normal: wp.array2d(dtype=wp.vec3f),
+    ray_face_id: wp.array2d(dtype=wp.int32),
+    ray_mesh_id: wp.array2d(dtype=wp.int16),
+    mesh_positions: wp.array(dtype=wp.vec3f),
+    mesh_rotations: wp.array(dtype=wp.quatf),
+    max_dist: float,
+    min_dist: float,
+    num_worlds: int,
+    num_entities: int,
+    num_world_mesh_indices: int,
+    num_rays: int,
+    return_normal: int,
+    return_face_id: int,
+    return_mesh_id: int,
+):
+    """Ray-cast a ray against the precomputed flat mesh set for its world."""
+    ray_batch_id, ray_id = wp.tid()
+    if ray_batch_id < 0 or ray_batch_id >= num_worlds or ray_id < 0 or ray_id >= num_rays:
+        return
 
-        # ray cast against the mesh and store the hit position
-        query_returns = wp.mesh_query_ray(mesh_wp_id, start_local, direction_local, max_dist)
-        # if the ray hit, store the hit data
-        if query_returns.result and query_returns.t < ray_distance_buf and query_returns.t > min_dist:
-            ray_hits[tid] = start + direction * query_returns.t
-            ray_distance_buf = query_returns.t
-            if return_distance == 1:
-                ray_distance[tid] = query_returns.t
+    world_id = ray_world_ids[ray_batch_id, ray_id]
+    if world_id < 0 or world_id >= num_worlds or not env_mask[world_id]:
+        return
+
+    group_start = world_mesh_offsets[world_id]
+    group_end = world_mesh_offsets[world_id + 1]
+    if group_start < 0 or group_end < group_start or group_end > num_world_mesh_indices:
+        return
+
+    ray_start = ray_starts[ray_batch_id, ray_id]
+    ray_direction = ray_directions[ray_batch_id, ray_id]
+    closest_distance = float(max_dist)
+    closest_normal = wp.vec3f()
+    closest_face_id = int(-1)
+    closest_mesh_id = int(-1)
+
+    # The world membership is fixed for a rollout. One thread owns one ray and
+    # deterministically reduces hits over only that world's flat entity indices.
+    for group_index in range(group_start, group_end):
+        mesh_id = world_mesh_indices[group_index]
+        if mesh_id < 0 or mesh_id >= num_entities:
+            continue
+
+        mesh_pose = wp.transform(mesh_positions[mesh_id], mesh_rotations[mesh_id])
+        mesh_pose_inv = wp.transform_inverse(mesh_pose)
+        start_local = wp.transform_point(mesh_pose_inv, ray_start)
+        direction_local = wp.transform_vector(mesh_pose_inv, ray_direction)
+        query = wp.mesh_query_ray(meshes[mesh_id], start_local, direction_local, max_dist)
+
+        if query.result and query.t > min_dist and query.t < closest_distance:
+            closest_distance = query.t
+            closest_mesh_id = mesh_id
             if return_normal == 1:
-                # transform the normal back to world space
-                n = wp.transform_vector(mesh_transform, query_returns.normal)
-                ray_normal[tid] = n
+                closest_normal = wp.transform_vector(mesh_pose, query.normal)
             if return_face_id == 1:
-                ray_face_id[tid] = query_returns.face
-            if return_mesh_id == 1:
-                ray_mesh_id[tid] = wp.int16(mesh_idx)
+                closest_face_id = query.face
+
+    if closest_mesh_id >= 0:
+        ray_distance[ray_batch_id, ray_id] = closest_distance
+        ray_hits[ray_batch_id, ray_id] = ray_start + closest_distance * ray_direction
+        if return_normal == 1:
+            ray_normal[ray_batch_id, ray_id] = closest_normal
+        if return_face_id == 1:
+            ray_face_id[ray_batch_id, ray_id] = closest_face_id
+        if return_mesh_id == 1:
+            ray_mesh_id[ray_batch_id, ray_id] = wp.int16(closest_mesh_id)
+    else:
+        if return_face_id == 1:
+            ray_face_id[ray_batch_id, ray_id] = -1
+        if return_mesh_id == 1:
+            ray_mesh_id[ray_batch_id, ray_id] = wp.int16(-1)

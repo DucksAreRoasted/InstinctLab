@@ -14,7 +14,7 @@ A multi reward manager is an environment component that substitute the default r
 from instinctlab.managers import MultiRewardCfg
 from isaaclab.managers import RewardTermCfg as RewTermCfg
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 import instinctlab.envs.mdp as instinct_mdp
 import isaaclab.envs.mdp as mdp
 

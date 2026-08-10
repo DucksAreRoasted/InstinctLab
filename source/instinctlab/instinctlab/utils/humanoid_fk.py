@@ -71,7 +71,7 @@ def export_forward_kinematics_as_onnx(
                 ],
                 dim=1,
             )  # [1, num_links, 3, 3]
-            links_quat = math_utils.quat_from_matrix(links_rotmat)  # [1, num_links, 4], (w, x, y, z) order
+            links_quat = math_utils.quat_from_matrix(links_rotmat)  # [1, num_links, 4], (x, y, z, w) order
             return links_pos, links_quat
 
     forward_kinematics = ForwardKinematics(pk_chain, key_link_names, key_link_indices)

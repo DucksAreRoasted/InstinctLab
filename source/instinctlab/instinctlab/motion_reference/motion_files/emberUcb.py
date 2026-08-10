@@ -46,9 +46,10 @@ class EmberUcb(AmassMotion):
 
         body_names = motion_data["body_names"].tolist()
         all_body_positions = torch.as_tensor(motion_data["body_positions"].astype(np.float32))  # (N, num_bodies, 3)
-        all_body_rotations = torch.as_tensor(
+        all_body_rotations_wxyz = torch.as_tensor(
             motion_data["body_rotations"].astype(np.float32)
         )  # (N, num_bodies, 4) wxyz
+        all_body_rotations = math_utils.convert_quat(all_body_rotations_wxyz, to="xyzw")
         all_body_lin_vel = torch.as_tensor(
             motion_data["body_linear_velocities"].astype(np.float32)
         )  # (N, num_bodies, 3)
@@ -59,14 +60,12 @@ class EmberUcb(AmassMotion):
         key_link_names = self.link_of_interests
         retargetted_link_to_output_link_ids = [body_names.index(l_name) for l_name in key_link_names]
         link_pos_w = all_body_positions[:, retargetted_link_to_output_link_ids, :]  # (N, num_key_links, 3)
-        link_rot_w = all_body_rotations[:, retargetted_link_to_output_link_ids, :]  # (N, num_key_links, 4) wxyz
-        # link_rot_w = math_utils.convert_quat(link_rot_w, to="wxyz") # (N, num_key_links, 4)
+        link_rot_w = all_body_rotations[:, retargetted_link_to_output_link_ids, :]  # (N, num_key_links, 4) xyzw
         link_lin_vel_w = all_body_lin_vel[:, retargetted_link_to_output_link_ids, :]  # (N, num_key_links, 3)
         link_ang_vel_w = all_body_ang_vel[:, retargetted_link_to_output_link_ids, :]  # (N, num_key_links, 3)
 
         base_pos_w = all_body_positions[:, body_names.index(self.cfg.base_link_name), :]  # (N, 3)
-        base_rot_w = all_body_rotations[:, body_names.index(self.cfg.base_link_name), :]  # (N, 4) wxyz
-        # base_rot_w = math_utils.convert_quat(base_rot_w, to="wxyz") # (N, 4)
+        base_rot_w = all_body_rotations[:, body_names.index(self.cfg.base_link_name), :]  # (N, 4) xyzw
         base_lin_vel_w = all_body_lin_vel[:, body_names.index(self.cfg.base_link_name), :]  # (N, 3)
         base_ang_vel_w = all_body_ang_vel[:, body_names.index(self.cfg.base_link_name), :]  # (N, 3)
 

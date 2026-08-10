@@ -4,8 +4,6 @@ import torch
 from prettytable import PrettyTable
 from typing import TYPE_CHECKING, Sequence
 
-import omni.physics.tensors.impl.api as physx
-
 import isaaclab.utils.math as math_utils
 from isaaclab.envs.mdp import joint_pos, joint_pos_rel
 from isaaclab.managers import ManagerTermBase, ObservationTermCfg, SceneEntityCfg
@@ -90,13 +88,13 @@ class link_pos_reference_masked(ManagerTermBase):
             (num_envs, num_links, 3)
         """
         # obtain the link position w.r.t the robot base
-        link_pos_w = self.asset.data.body_link_pos_w[:, self.asset_cfg.body_ids]
+        link_pos_w = self.asset.data.body_link_pos_w.torch[:, self.asset_cfg.body_ids]
         if in_base_frame:
             link_pos = math_utils.transform_points(
                 link_pos_w,
                 *math_utils.subtract_frame_transforms(
-                    self.asset.data.root_link_pos_w,
-                    self.asset.data.root_link_quat_w,
+                    self.asset.data.root_link_pos_w.torch,
+                    self.asset.data.root_link_quat_w.torch,
                 ),
             )
         else:

@@ -34,7 +34,8 @@ class StayStillMotion(MotionBuffer):
         super().__init__(cfg, *args, **kwargs)
 
         # (num_envs, num_joints)
-        self.rest_joint_pos = torch.zeros_like(self.articulation_view.get_dof_positions())
+        joint_pos = self.articulation_view.get_dof_positions()
+        self.rest_joint_pos = torch.zeros_like(joint_pos)
         self.rest_base_pose = torch.zeros(self.rest_joint_pos.shape[0], 7, device=self.device)
 
     @property
@@ -56,7 +57,7 @@ class StayStillMotion(MotionBuffer):
         state_buffer.joint_vel[env_ids] = 0.0
         state_buffer.base_pos_w[env_ids] = env_origins[env_ids]
         state_buffer.base_pos_w[env_ids, 2] += self.cfg.resting_pose_spawn_height_offset
-        state_buffer.base_quat_w[env_ids] = torch.tensor([1.0, 0.0, 0.0, 0.0], device=self.device).expand(
+        state_buffer.base_quat_w[env_ids] = torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.device).expand(
             len(env_ids), -1
         )
         state_buffer.base_lin_vel_w[env_ids] = 0.0
@@ -74,9 +75,9 @@ class StayStillMotion(MotionBuffer):
         joint_pos = self.articulation_view.get_dof_positions().clone()  # (num_envs, num_dofs)
         joint_pos = joint_pos[env_ids]
 
-        base_pose_w = self.articulation_view.get_root_transforms().clone()[:, :7]  # in case of changing API.
+        base_pose_w = self.articulation_view.get_root_transforms().clone()[:, :7]
         _base_pos_w = base_pose_w[env_ids][:, :3]
-        _base_quat_w = math_utils.convert_quat(base_pose_w[env_ids][:, 3:7], to="wxyz")
+        _base_quat_w = base_pose_w[env_ids][:, 3:7]
         base_pose_w = torch.cat((_base_pos_w, _base_quat_w), dim=-1)
 
         # determine whether to store the current state as the resting pose

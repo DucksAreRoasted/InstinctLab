@@ -2,7 +2,7 @@ import torch
 from dataclasses import MISSING
 from typing import Callable, Optional
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.noise import NoiseCfg
 
 from .noise_model import (

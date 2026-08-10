@@ -1,7 +1,5 @@
-try:
-    from .rsl_rl_env_wrappers import RslRlVecEnvWrapper
-except ImportError:
-    print("Failed to import RslRlVecEnvWrapper, ignoring...")
-    RslRlVecEnvWrapper = None
+"""Environment wrappers provided by InstinctLab."""
 
-from .instinct_rl import InstinctRlVecEnvWrapper
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

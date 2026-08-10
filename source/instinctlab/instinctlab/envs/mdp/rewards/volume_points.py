@@ -4,12 +4,12 @@ import torch
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import ContactSensor
-
-from instinctlab.sensors import VolumePoints
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    from isaaclab.sensors import ContactSensor
+
+    from instinctlab.sensors.volume_points.volume_points import VolumePoints
 
 
 def volume_points_penetration(
@@ -55,7 +55,9 @@ def step_safety(
     if once:
         contacts = contact_sensor.compute_first_contact(env.step_dt)[:, contact_forces_cfg.body_ids]  # (N, B_)
     else:
-        contact_forces = contact_sensor.data.net_forces_w_history[:, :, contact_forces_cfg.body_ids, :]  # (N, T, B_, 3)
+        contact_forces = contact_sensor.data.net_forces_w_history.torch[
+            :, :, contact_forces_cfg.body_ids, :
+        ]  # (N, T, B_, 3)
         contacts = torch.norm(contact_forces, dim=-1).max(dim=1)[0] > 1.0  # (N, B_)
 
     rewards = -torch.log(penetration_depth_max + epsilon) * contacts

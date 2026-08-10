@@ -11,7 +11,7 @@ from isaaclab.terrains.height_field import (
     HfTerrainBaseCfg,
     HfWaveTerrainCfg,
 )
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from . import hf_terrains
 

@@ -1,3 +1,5 @@
-from .module_cfg import *
-from .rl_cfg import *
-from .vecenv_wrapper import InstinctRlVecEnvWrapper
+"""Instinct-RL configuration and environment-wrapper interfaces."""
+
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,7 +19,7 @@ from .stay_still import StayStillMotion
 class StayStillMotionCfg(MotionBufferCfg):
     """Configuration for the stay still motion, which generates motion that asks the robot to stay still."""
 
-    class_type: type = StayStillMotion
+    class_type: type | str = "{DIR}.stay_still:StayStillMotion"
 
     pseudo_num_trajectories: int = 1
     """ The number of trajectories in the motion buffer, which effects the ratio of assigning robot to this buffer. """

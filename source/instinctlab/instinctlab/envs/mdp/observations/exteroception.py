@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     from instinctlab.sensors import GroupedRayCasterCamera, NoisyGroupedRayCasterCamera
 
 
+def _camera_output_as_torch(output) -> torch.Tensor:
+    """Return a Torch view for native ProxyArray output or a derived Torch buffer."""
+    return output.torch if hasattr(output, "torch") else output
+
+
 def _debug_visualize_image(
     image: torch.Tensor,
     scale_up_vis: int = 5,
@@ -84,7 +89,7 @@ def visualizable_image(
     )
 
     # obtain the input image
-    images = sensor.data.output[data_type].clone()  # (N, H, W, C) or (N, history, H, W, C)
+    images = _camera_output_as_torch(sensor.data.output[data_type]).clone()  # (N, H, W, C) or history
     if "history" in data_type:
         # NOTE: Only depth-related data types with history are supported. where C = 1.
         images = images.squeeze(
@@ -127,11 +132,12 @@ class delayed_visualizable_image(ManagerTermBase):
         self.history_skip_frames = max(cfg.params.get("history_skip_frames", 1), 1)
         # if greater than 0, the output data from this observation term will have history dimension, else no history dimension.
         self.num_output_frames = max(cfg.params.get("num_output_frames", 0), 1)
-        assert len(self.sensor.data.output[self.data_type].shape) >= 5, (
+        sensor_output = _camera_output_as_torch(self.sensor.data.output[self.data_type])
+        assert len(sensor_output.shape) >= 5, (
             f"sensor data of type {self.data_type} should have (N, history, H, W, C) shape, but got"
-            f" {self.sensor.data.output[self.data_type].shape}"
+            f" {sensor_output.shape}"
         )
-        self.sensor_history_length = self.sensor.data.output[self.data_type].shape[1]
+        self.sensor_history_length = sensor_output.shape[1]
 
         # build frame offset based on num_output_frames and history_skip_frames
         # use reverse order because [:, -1] gets the latest frame in sensor data. frame_offset[0] should be the largest
@@ -195,7 +201,7 @@ class delayed_visualizable_image(ManagerTermBase):
         Get the delayed frames from the sensor data.
         """
         # obtain the input image
-        images = self.sensor.data.output[self.data_type].clone()  # (N, history, H, W, C)
+        images = _camera_output_as_torch(self.sensor.data.output[self.data_type]).clone()  # (N, history, H, W, C)
         # NOTE: Only depth-related data types with history are supported for now. where C = 1.
         images = images.squeeze(
             -1

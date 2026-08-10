@@ -1,2 +1,3 @@
 from .commands_cfg import PoseVelocityCommandCfg
-from .pose_velocity_command import PoseVelocityCommand
+
+__all__ = ["PoseVelocityCommandCfg"]

@@ -7,8 +7,6 @@ from copy import copy
 from prettytable import PrettyTable
 from typing import TYPE_CHECKING
 
-import omni.physics.tensors.impl.api as physx
-
 import isaaclab.utils.math as math_utils
 import isaaclab.utils.string as string_utils
 from isaaclab.markers import VisualizationMarkers
@@ -21,6 +19,8 @@ from instinctlab.utils.prims import get_articulation_view
 from .motion_reference_data import MotionReferenceData, MotionReferenceState
 
 if TYPE_CHECKING:
+    import omni.physics.tensors.api as physx
+
     from .motion_reference_cfg import MotionReferenceManagerCfg
     from .motion_buffer import MotionBuffer
 
@@ -29,6 +29,7 @@ import torch
 import torch.distributed as dist
 
 import pytorch_kinematics as pk
+import warp as wp
 
 
 class MotionReferenceManager(SensorBase):
@@ -45,6 +46,18 @@ class MotionReferenceManager(SensorBase):
         4. GenerativeMotion: for example locomotion command can be directly generated from the robot's
             current state. But this type of motion reference only contains the robot's base pose
             trajectory. And this type of motion reference does not need motion_reference_buffer.
+
+    Note:
+        Inheriting :class:`SensorBase` is intentional. Isaac Lab 3.0 does not provide a generic
+        scene-managed system type, while sensors are constructed from the scene configuration,
+        initialized when physics becomes ready, reset with the scene, and timestamped by
+        ``InteractiveScene.update``. With PhysX, that update occurs after every simulation step.
+        Motion-reference interpolation remains lazy and runs only when outdated data is accessed.
+
+        A Newton backend may execute all decimation substeps inside one captured graph and call the
+        Python scene update only once with the total environment-step duration. Policy-boundary
+        references still advance by the correct simulated time, but true per-Newton-substep work
+        would require a separate graph-safe Warp implementation rather than a Python sensor update.
     """
 
     cfg: MotionReferenceManagerCfg
@@ -94,7 +107,8 @@ class MotionReferenceManager(SensorBase):
         (Acquired passively)
         """
         outdated_mask = torch.logical_or(
-            (self._reference_frame_timestamp - self._timestamp).abs() > 1e-6, self._reference_frame_timestamp < 1e-6
+            (self._reference_frame_timestamp - self._timestamp_torch).abs() > 1e-6,
+            self._reference_frame_timestamp < 1e-6,
         )
         if outdated_mask.any():
             env_ids_to_update = self._ALL_INDICES[outdated_mask]
@@ -107,7 +121,7 @@ class MotionReferenceManager(SensorBase):
                 env_ids_this_buffer = env_ids_to_update[env_ids_this_buffer_mask]
                 buffer.fill_motion_data(
                     env_ids_this_buffer,
-                    self._timestamp[env_ids_this_buffer].unsqueeze(-1),  # (N, 1)
+                    self._timestamp_torch[env_ids_this_buffer].unsqueeze(-1),  # (N, 1)
                     self.env_origins,
                     self._reference_frame,
                 )
@@ -115,7 +129,7 @@ class MotionReferenceManager(SensorBase):
                 if self._symmetric_augmentation_conditions_met:
                     env_ids_to_augment = env_ids_this_buffer[self._env_symmetric_augmentation_mask[env_ids_this_buffer]]
                     self._symmetric_augment_reference_data(self._reference_frame, env_ids_to_augment)
-            self._reference_frame_timestamp[outdated_mask] = self._timestamp[outdated_mask]
+            self._reference_frame_timestamp[outdated_mask] = self._timestamp_torch[outdated_mask]
         return self._reference_frame
 
     @property
@@ -124,10 +138,10 @@ class MotionReferenceManager(SensorBase):
         we compute a reference base position matching robot's x-y position but no z position.
         Shape: (num_envs, 3)
         """
-        if ((self._reference_relative_base_pos.timestamp - self._timestamp).abs() > 1e-6).any():
-            self._reference_relative_base_pos.data = self._view.get_root_transforms().clone()[:, :3]
+        if ((self._reference_relative_base_pos.timestamp - self._timestamp_torch).abs() > 1e-6).any():
+            self._reference_relative_base_pos.data = self._view.get_root_transforms()[:, :3].clone()
             self._reference_relative_base_pos.data[:, 2] = self.reference_frame.base_pos_w[:, 0, 2]
-            self._reference_relative_base_pos.timestamp = self._timestamp.clone()
+            self._reference_relative_base_pos.timestamp = self._timestamp_torch.clone()
         return self._reference_relative_base_pos.data
 
     @property
@@ -137,15 +151,15 @@ class MotionReferenceManager(SensorBase):
         Any world-frame rotation in the motion reference left-multiply by this quat will get the robot's relative frame position.
         Shape: (num_envs, 4)
         """
-        if ((self._reference_relative_delta_quat.timestamp - self._timestamp).abs() > 1e-6).any():
-            _view_quat = math_utils.convert_quat(self._view.get_root_transforms().clone()[:, 3:7], to="wxyz")
+        if ((self._reference_relative_delta_quat.timestamp - self._timestamp_torch).abs() > 1e-6).any():
+            _view_quat = self._view.get_root_transforms()[:, 3:7]
             self._reference_relative_delta_quat.data = math_utils.yaw_quat(
                 math_utils.quat_mul(
                     _view_quat,
                     math_utils.quat_inv(self.reference_frame.base_quat_w[:, 0]),
                 )
             )
-            self._reference_relative_delta_quat.timestamp = self._timestamp.clone()
+            self._reference_relative_delta_quat.timestamp = self._timestamp_torch.clone()
         return self._reference_relative_delta_quat.data
 
     @property
@@ -154,7 +168,7 @@ class MotionReferenceManager(SensorBase):
         joint_pos / roll-pitch remains the same, the links' position in the world frame.
         Shape: (num_envs, num_links, 3)
         """
-        if ((self._reference_link_pos_relative_w.timestamp - self._timestamp).abs() > 1e-6).any():
+        if ((self._reference_link_pos_relative_w.timestamp - self._timestamp_torch).abs() > 1e-6).any():
             delta_quat = self.reference_relative_delta_quat.unsqueeze(1).expand(
                 -1,
                 self.num_link_of_interests,
@@ -174,17 +188,17 @@ class MotionReferenceManager(SensorBase):
                     -1,
                 ),
             )
-            self._reference_link_pos_relative_w.timestamp = self._timestamp.clone()
+            self._reference_link_pos_relative_w.timestamp = self._timestamp_torch.clone()
         return self._reference_link_pos_relative_w.data
 
     @property
     def reference_link_quat_relative_w(self) -> torch.Tensor:
         """Assuming the motion's base frame is at the robot's x-y position, heading;
         joint_pos / roll-pitch remains the same, the links' quaternion in the world frame.
-        (w, x, y, z) format.
+        (x, y, z, w) format.
         Shape: (num_envs, num_links, 4)
         """
-        if ((self._reference_link_quat_relative_w.timestamp - self._timestamp).abs() > 1e-6).any():
+        if ((self._reference_link_quat_relative_w.timestamp - self._timestamp_torch).abs() > 1e-6).any():
             self._reference_link_quat_relative_w.data = math_utils.quat_mul(
                 self.reference_relative_delta_quat.unsqueeze(1).expand(
                     -1,
@@ -193,7 +207,7 @@ class MotionReferenceManager(SensorBase):
                 ),
                 self.reference_frame.link_quat_w[:, 0],
             )
-            self._reference_link_quat_relative_w.timestamp = self._timestamp.clone()
+            self._reference_link_quat_relative_w.timestamp = self._timestamp_torch.clone()
         return self._reference_link_quat_relative_w.data
 
     @property
@@ -240,7 +254,7 @@ class MotionReferenceManager(SensorBase):
 
     @property
     def time_passed_from_update(self) -> torch.Tensor:
-        return self._timestamp - self._timestamp_last_update
+        return self._timestamp_torch - self._timestamp_last_update_torch
 
     @property
     def is_at_keyframe(self) -> torch.Tensor:
@@ -248,9 +262,9 @@ class MotionReferenceManager(SensorBase):
         NOTE: currently assuming all frame interval are the same across frames in a given env.
         """
         return torch.where(
-            self._timestamp > self._timestamp_last_update,
+            self._timestamp_torch > self._timestamp_last_update_torch,
             (torch.clip(self.time_passed_from_update, min=0.0) % self.frame_interval_s) < 1e-6,
-            torch.zeros_like(self._timestamp, dtype=torch.bool),
+            torch.zeros_like(self._timestamp_torch, dtype=torch.bool),
         )
 
     @property
@@ -259,7 +273,7 @@ class MotionReferenceManager(SensorBase):
         # e.g. The 0-th frame is the frame at `_timestamp_last_update + frame_interval_s`
         # When `_timestamp - _timestamp_last_update` == frame_interval_s,
         # the aiming frame should still be 0.
-        if ((self._aiming_frame_idx.timestamp - self._timestamp).abs() > 1e-6).any():
+        if ((self._aiming_frame_idx.timestamp - self._timestamp_torch).abs() > 1e-6).any():
             time_passed_from_update = self.time_passed_from_update  # (N,)
             time_to_target_frame = self.data.time_to_target_frame  # (N, num_frames)
             aiming_frame_idx = torch.sum(
@@ -271,7 +285,7 @@ class MotionReferenceManager(SensorBase):
             )  # (N,)
             aiming_frame_idx[aiming_frame_idx >= self.num_frames] = -1
             self._aiming_frame_idx.data = aiming_frame_idx
-            self._aiming_frame_idx.timestamp = self._timestamp.clone()
+            self._aiming_frame_idx.timestamp = self._timestamp_torch.clone()
         return self._aiming_frame_idx.data
 
     @property
@@ -420,7 +434,9 @@ class MotionReferenceManager(SensorBase):
         """
         input_device = joint_pos.device
         joint_pos = joint_pos.to(self.device)
-        all_link_poses = self._robot_kinematics_chain.forward_kinematics(joint_pos[:, self._joint_order_isaac_to_pk])
+        all_link_poses = self._robot_kinematics_chain.forward_kinematics(
+            joint_pos[:, self._joint_order_isaac_to_pk], frame_indices=self._link_indices_pk
+        )
         link_pos_quat_b = torch.zeros(joint_pos.shape[0], self.num_link_to_ref, 7, device=self.device)
         for link_idx, link_name in enumerate(self.cfg.link_of_interests):
             pose_mat = all_link_poses[link_name].get_matrix().reshape(-1, 4, 4)
@@ -508,6 +524,9 @@ class MotionReferenceManager(SensorBase):
 
     def _initialize_impl(self):
         super()._initialize_impl()
+        self._is_outdated_torch = wp.to_torch(self._is_outdated)
+        self._timestamp_torch = wp.to_torch(self._timestamp)
+        self._timestamp_last_update_torch = wp.to_torch(self._timestamp_last_update)
         self._initialize_data()
         if self.cfg.robot_model_path is not None:
             # if robot model (urdf) if provided, initialize kinematics chain and joint order mapping
@@ -517,9 +536,30 @@ class MotionReferenceManager(SensorBase):
         self._resample_update_period()
         print(self)  # print the tabular information of the motion reference managed buffer.
 
-    def _update_buffers_impl(self, env_ids: Sequence[int] | torch.Tensor):
-        """Update the motion reference buffers for the given env_ids."""
-        env_ids = torch.as_tensor(env_ids, device=self.device)
+    def _update_outdated_buffers(self):
+        """Update only when at least one motion-reference environment is outdated.
+
+        Isaac Lab 3's base implementation dispatches both the implementation and
+        a Warp bookkeeping kernel for every passive ``data`` access, including
+        when the outdated mask is empty. Motion-reference data is accessed many
+        times per environment step, so retain the lazy-sensor contract here and
+        skip both dispatches when there is no work.
+        """
+        env_ids = self._ALL_INDICES[self._is_outdated_torch]
+        if env_ids.numel() == 0:
+            return
+        self._update_buffers_impl(self._is_outdated)
+        self._timestamp_last_update_torch[env_ids] = self._timestamp_torch[env_ids]
+        self._is_outdated_torch[env_ids] = False
+
+    def _update_buffers_impl(self, env_mask: wp.array):
+        """Update the motion reference buffers for environments selected by a Warp mask."""
+        env_ids = self._ALL_INDICES[wp.to_torch(env_mask)]
+        # Isaac Lab 3 invokes this method even when every outdated-mask entry is
+        # false. Avoid repeating dataset interpolation for each passive data
+        # property access within the same environment step.
+        if env_ids.numel() == 0:
+            return
         # compute the time left to reach the specific frame
         time_to_target_frame = torch.arange(self.cfg.num_frames, device=self.device, dtype=torch.float32)
         if self.cfg.data_start_from == "one_frame_interval":
@@ -536,7 +576,8 @@ class MotionReferenceManager(SensorBase):
             env_ids_this_buffer = env_ids[env_ids_this_buffer_mask]
             buffer.fill_motion_data(
                 env_ids_this_buffer,
-                self._timestamp[env_ids_this_buffer].unsqueeze(-1) + time_to_target_frame[env_ids_this_buffer_mask],
+                self._timestamp_torch[env_ids_this_buffer].unsqueeze(-1)
+                + time_to_target_frame[env_ids_this_buffer_mask],
                 self.env_origins,
                 self._data,
             )
@@ -582,6 +623,8 @@ class MotionReferenceManager(SensorBase):
 
     def _initialize_data(self):
         """Initialize _data for the 'sensor' output"""
+        import omni.physics.tensors.api as physx
+
         self._physics_sim_view = physx.create_simulation_view(self._backend)
         self._physics_sim_view.set_subspace_roots("/")
         self._view: physx.ArticulationView = get_articulation_view(
@@ -590,6 +633,7 @@ class MotionReferenceManager(SensorBase):
         )
         self._ALL_INDICES = torch.arange(self._view.count, device=self.device)
         self.isaac_joint_names = self._view.shared_metatype.dof_names
+        self._initialize_symmetric_joint_mapping()
 
         make_empty_data_kwargs = self._prepare_data_class_kwargs()
 
@@ -620,6 +664,38 @@ class MotionReferenceManager(SensorBase):
         self._reference_relative_delta_quat = TimestampedBuffer()
         self._reference_link_pos_relative_w = TimestampedBuffer()
         self._reference_link_quat_relative_w = TimestampedBuffer()
+
+    def _initialize_symmetric_joint_mapping(self):
+        """Resolve configured symmetry arrays into the runtime articulation order."""
+        mapping = self.cfg.symmetric_augmentation_joint_mapping
+        reverse = self.cfg.symmetric_augmentation_joint_reverse_buf
+        joint_names = self.cfg.symmetric_augmentation_joint_names
+        if mapping is None or reverse is None:
+            self._symmetric_joint_mapping = None
+            self._symmetric_joint_reverse = None
+            return
+        if len(mapping) != self.num_joints or len(reverse) != self.num_joints:
+            raise ValueError(
+                f"Joint symmetry mapping and reverse buffer must contain exactly {self.num_joints} entries."
+            )
+        if joint_names is None:
+            self._symmetric_joint_mapping = list(mapping)
+            self._symmetric_joint_reverse = torch.as_tensor(reverse, device=self.device)
+            return
+        if len(joint_names) != self.num_joints or set(joint_names) != set(self.isaac_joint_names):
+            raise ValueError("symmetric_augmentation_joint_names must contain each articulation joint exactly once.")
+
+        configured_name_to_index = {name: index for index, name in enumerate(joint_names)}
+        runtime_name_to_index = {name: index for index, name in enumerate(self.isaac_joint_names)}
+        self._symmetric_joint_mapping = []
+        runtime_reverse = []
+        for runtime_name in self.isaac_joint_names:
+            configured_output_index = configured_name_to_index[runtime_name]
+            configured_input_index = mapping[configured_output_index]
+            input_name = joint_names[configured_input_index]
+            self._symmetric_joint_mapping.append(runtime_name_to_index[input_name])
+            runtime_reverse.append(reverse[configured_output_index])
+        self._symmetric_joint_reverse = torch.as_tensor(runtime_reverse, device=self.device)
 
     def _initialize_motion_buffers(self):
         """Initialize all the motion reference buffers by computing specific data range of this process
@@ -653,9 +729,22 @@ class MotionReferenceManager(SensorBase):
     def _initialize_robot_kinematics(self):
         with open(self.cfg.robot_model_path) as f:
             self._robot_kinematics_chain = pk.build_chain_from_urdf(f.read()).to(dtype=torch.float, device=self.device)
+
+        # pytorch-kinematics decorates these instance methods with process-global,
+        # unbounded functools caches. Cache entries retain the Chain instance and
+        # all of its CUDA tensors after an environment closes. Resolve the values
+        # needed at runtime once, then clear the dependency-owned caches. Passing
+        # explicit frame indices to forward_kinematics prevents repopulating them.
+        try:
+            joint_parameter_names = self._robot_kinematics_chain.get_joint_parameter_names()
+            self._link_indices_pk = self._robot_kinematics_chain.get_frame_indices(*self.cfg.link_of_interests)
+        finally:
+            pk.Chain.get_joint_parameter_names.cache_clear()
+            pk.Chain.get_frame_indices.cache_clear()
+
         # joint_pos_pk = joint_pos_isaac[_joint_order_isaac_to_pk]
         self._joint_order_isaac_to_pk = torch.ones(self._view.max_dofs, device=self.device, dtype=torch.long) * -1
-        for joint_i, joint_name in enumerate(self._robot_kinematics_chain.get_joint_parameter_names()):
+        for joint_i, joint_name in enumerate(joint_parameter_names):
             if not joint_name in self.isaac_joint_names:
                 raise RuntimeError(
                     f"Joint name {joint_name} in the robot kinematics chain is not found in the physics simulation"
@@ -851,8 +940,8 @@ class MotionReferenceManager(SensorBase):
     @property
     def _symmetric_augmentation_conditions_met(self) -> bool | torch.Tensor:
         return (
-            (self.cfg.symmetric_augmentation_joint_mapping is not None)
-            and (self.cfg.symmetric_augmentation_joint_reverse_buf is not None)
+            (self._symmetric_joint_mapping is not None)
+            and (self._symmetric_joint_reverse is not None)
             and (self.num_link_to_ref == 0 or self.cfg.symmetric_augmentation_link_mapping is not None)
             and self._env_symmetric_augmentation_mask.any()
         )
@@ -862,11 +951,11 @@ class MotionReferenceManager(SensorBase):
         Assuming the last dimension is the joint dimension.
         """
         num_dims = len(joint_pos_buf.shape)
-        joint_reverse_buf = torch.tensor(self.cfg.symmetric_augmentation_joint_reverse_buf, device=self.device)
+        joint_reverse_buf = self._symmetric_joint_reverse
         if num_dims > 1:
             for _ in range(num_dims - 1):
                 joint_reverse_buf = joint_reverse_buf.unsqueeze(0)
-        joint_pos_buf[..., :] = joint_pos_buf[..., self.cfg.symmetric_augmentation_joint_mapping] * joint_reverse_buf
+        joint_pos_buf[..., :] = joint_pos_buf[..., self._symmetric_joint_mapping] * joint_reverse_buf
         return joint_pos_buf
 
     def _symmetric_augment_ang_vel_buffer(self, ang_vel_buf: torch.Tensor):
@@ -888,22 +977,22 @@ class MotionReferenceManager(SensorBase):
 
     def _symmetric_augment_link_quat_buffer(self, link_quat_buf: torch.Tensor):
         """Symmetrically augment the link quaternion buffer w.r.t x-z plane, values changed in place.
-        Assuming the last dimension is the quaternion (w, x, y, z) dimension, the second last dimension is the link dimension.
+        Assuming the last dimension is the quaternion (x, y, z, w) dimension, the second last dimension is the link dimension.
         """
         # mirror the quaternion w.r.t x-z plane
         # from https://stackoverflow.com/questions/32438252/efficient-way-to-apply-mirror-effect-on-quaternion-rotation
         link_quat_buf[:] = link_quat_buf[..., self.cfg.symmetric_augmentation_link_mapping, :]
-        link_quat_buf[..., 1] *= -1
-        link_quat_buf[..., 3] *= -1
+        link_quat_buf[..., 0] *= -1
+        link_quat_buf[..., 2] *= -1
         return link_quat_buf
 
     def _symmetric_augment_quat_buffer(self, quat_buf: torch.Tensor):
         """Symmetrically augment the quaternion buffer w.r.t x-z plane, values changed in place.
-        Assuming the last dimension is the quaternion (w, x, y, z) dimension.
+        Assuming the last dimension is the quaternion (x, y, z, w) dimension.
         """
         # from https://stackoverflow.com/questions/32438252/efficient-way-to-apply-mirror-effect-on-quaternion-rotation
-        quat_buf[..., 1] *= -1
-        quat_buf[..., 3] *= -1
+        quat_buf[..., 0] *= -1
+        quat_buf[..., 2] *= -1
         return quat_buf
 
     def _symmetric_augment_reference_data(self, data_buf: MotionReferenceData, env_ids: torch.Tensor | slice):
@@ -966,13 +1055,11 @@ class MotionReferenceManager(SensorBase):
         if self.cfg.visualizing_robot_from == "aiming_frame":
             aiming_frame_idx = self.aiming_frame_idx
             robot_pos_w = self.data.base_pos_w[self.ALL_INDICES, aiming_frame_idx].clone()
-            robot_quat_w_ = self.data.base_quat_w[self.ALL_INDICES, aiming_frame_idx]
-            robot_quat_w = math_utils.convert_quat(robot_quat_w_, to="xyzw")
+            robot_quat_w = self.data.base_quat_w[self.ALL_INDICES, aiming_frame_idx]
             robot_joint_pos = self.data.joint_pos[self.ALL_INDICES, aiming_frame_idx]
         elif self.cfg.visualizing_robot_from == "reference_frame":
             robot_pos_w = self.reference_frame.base_pos_w[self.ALL_INDICES, 0].clone()
-            robot_quat_w_ = self.reference_frame.base_quat_w[self.ALL_INDICES, 0]
-            robot_quat_w = math_utils.convert_quat(robot_quat_w_, to="xyzw")
+            robot_quat_w = self.reference_frame.base_quat_w[self.ALL_INDICES, 0]
             robot_joint_pos = self.data.joint_pos[self.ALL_INDICES, 0]
         else:
             raise ValueError(f"Unsupported cfg.visualizing_robot_from: {self.cfg.visualizing_robot_from}")

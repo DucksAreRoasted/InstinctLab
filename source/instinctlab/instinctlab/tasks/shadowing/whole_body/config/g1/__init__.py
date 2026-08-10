@@ -6,7 +6,7 @@ task_entry = "instinctlab.tasks.shadowing.whole_body.config.g1"
 
 gym.register(
     id="Instinct-Shadowing-WholeBody-Plane-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.plane_shadowing_cfg:G1PlaneShadowingEnvCfg",
@@ -17,7 +17,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Shadowing-WholeBody-Plane-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.plane_shadowing_cfg:G1PlaneShadowingEnvCfg_PLAY",

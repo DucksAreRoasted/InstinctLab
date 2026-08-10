@@ -4,12 +4,13 @@ import torch
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.utils.math as math_utils
-from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import SceneEntityCfg
 
 import instinctlab.envs.mdp.commands.utils as command_utils
 
 if TYPE_CHECKING:
+    from isaaclab.envs import ManagerBasedRLEnv
+
     from instinctlab.envs.mdp import (
         JointPosRefCommand,
         JointVelRefCommand,

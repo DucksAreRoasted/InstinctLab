@@ -4,16 +4,14 @@ import isaaclab.sim as sim_utils
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
-from isaaclab.utils import configclass
-
-from .pose_velocity_command import PoseVelocityCommand
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
 class PoseVelocityCommandCfg(CommandTermCfg):
     """Configuration for the position command generator."""
 
-    class_type: type = PoseVelocityCommand
+    class_type: type | str = "{DIR}.pose_velocity_command:PoseVelocityCommand"
 
     asset_name: str = MISSING
     """Name of the asset in the environment for which the commands are generated."""

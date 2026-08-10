@@ -29,12 +29,11 @@ from collections import deque
 if args_cli.video:
     import imageio.v2 as iio
 
-import isaacsim.core.utils.prims as prim_utils
+from isaaclab_visualizers.kit import KitVisualizerCfg
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation, AssetBaseCfg
-from isaaclab.envs import ViewerCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import Timer, configclass
@@ -60,8 +59,8 @@ if args_cli.debug:
     debugpy.wait_for_client()
     debugpy.breakpoint()
 
-VIEWER_CFG = ViewerCfg()
-VIEWER_CFG.resolution = (640, 360)
+VIDEO_CAMERA_PRIM_PATH = "/OmniverseKit_Persp"
+VIDEO_RESOLUTION = (640, 360)
 
 # ratio between the step_dt and sim_dt
 DECIMATION = 4
@@ -129,7 +128,7 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
         )
         import omni.replicator.core as rep
 
-        _render_product = rep.create.render_product(VIEWER_CFG.cam_prim_path, VIEWER_CFG.resolution)
+        _render_product = rep.create.render_product(VIDEO_CAMERA_PRIM_PATH, VIDEO_RESOLUTION)
         _rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
         _rgb_annotator.attach([_render_product])
         _video_interval_counter = 0
@@ -145,26 +144,8 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
 
         # write robot data based on motion reference
         motion_reference_frame = motion_reference.reference_frame
-        # robot.root_physx_view.set_dof_positions(
-        #     motion_reference_frame.joint_pos[:, 0],
-        #     indices=robot._ALL_INDICES,
-        # )
-        # robot.root_physx_view.set_dof_velocities(
-        #     motion_reference_frame.joint_vel[:, 0],
-        #     indices=robot._ALL_INDICES,
-        # )
-        # robot.root_physx_view.set_root_transforms(
-        #     torch.concatenate(
-        #         [
-        #             motion_reference_frame.base_pos_w[:, 0],
-        #             math_utils.convert_quat(motion_reference_frame.base_quat_w[:, 0], to="xyzw"),
-        #         ],
-        #         dim=-1,
-        #     ),
-        #     indices=robot._ALL_INDICES,
-        # )
-        robot.write_root_pose_to_sim(
-            torch.concatenate(
+        robot.write_root_pose_to_sim_index(
+            root_pose=torch.concatenate(
                 [
                     motion_reference_frame.base_pos_w[:, 0],
                     motion_reference_frame.base_quat_w[:, 0],
@@ -172,11 +153,13 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
                 dim=-1,
             ),
         )
-        robot.write_joint_state_to_sim(
-            motion_reference_frame.joint_pos[:, 0],
-            motion_reference_frame.joint_vel[:, 0],
+        robot.write_joint_state_to_sim_index(
+            position=motion_reference_frame.joint_pos[:, 0],
+            velocity=motion_reference_frame.joint_vel[:, 0],
         )
-        robot.write_root_velocity_to_sim(torch.zeros(robot.num_instances, 6, device=torch.device("cuda")))
+        robot.write_root_velocity_to_sim_index(
+            root_velocity=torch.zeros(robot.num_instances, 6, device=torch.device("cuda"))
+        )
 
         # reset motion reference if motion reference is exhausted
         reset_mask = torch.logical_not(motion_reference.data.validity.any(dim=-1))
@@ -196,7 +179,7 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
                 rgb_data = _rgb_annotator.get_data()
                 rgb_data = np.frombuffer(rgb_data, dtype=np.uint8).reshape(*rgb_data.shape)
                 if rgb_data.size == 0:
-                    rgb_data = np.zeros((VIEWER_CFG.resolution[1], VIEWER_CFG.resolution[0], 3), dtype=np.uint8)
+                    rgb_data = np.zeros((VIDEO_RESOLUTION[1], VIDEO_RESOLUTION[0], 3), dtype=np.uint8)
                 else:
                     rgb_data = rgb_data[:, :, :3]
                 # write to video
@@ -232,7 +215,11 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
 def main():
     """Main function."""
     # Load kit helper
-    sim_cfg = sim_utils.SimulationCfg(dt=0.005, device=args_cli.device)
+    sim_cfg = sim_utils.SimulationCfg(
+        dt=0.005,
+        device=args_cli.device,
+        visualizer_cfgs=KitVisualizerCfg(eye=(7.5, 7.5, 7.5), lookat=(0.0, 0.0, 0.0)),
+    )
     sim = SimulationContext(sim_cfg)
     # # Set main camera
     # sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])

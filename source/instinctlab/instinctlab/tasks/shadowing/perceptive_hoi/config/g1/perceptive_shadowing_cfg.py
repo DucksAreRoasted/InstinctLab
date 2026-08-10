@@ -8,7 +8,7 @@ from isaaclab.envs import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors.ray_caster import MultiMeshRayCasterCfg
 from isaaclab.sim.schemas import schemas_cfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.mdp as shadowing_mdp
@@ -19,13 +19,15 @@ from instinctlab.assets.unitree_g1 import (
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     beyondmimic_g1_29dof_delayed_actuators,
+    configure_g1_29dof_policy_io,
 )
-from instinctlab.monitors import ActuatorMonitorTerm, MonitorTermCfg, ShadowingBasePosMonitorTerm
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import HoiMotionReferenceData, HoiMotionReferenceState, MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.omomo_motion_cfg import OmomoMotionCfg as OmomoMotionCfgBase
 from instinctlab.motion_reference.utils import motion_interpolate_bilinear
 from instinctlab.sensors import get_link_prim_targets
 from instinctlab.sim import MeshFileCfg
+from instinctlab.utils.urdf import urdf_importer_link_prim_path
 
 G1_CFG = G1_29DOF_TORSOBASE_POPSICLE_CFG
 
@@ -63,11 +65,11 @@ class OmomoMotionCfg(OmomoMotionCfgBase):
 
 
 motion_reference_cfg = MotionReferenceManagerCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    robot_model_path=G1_CFG.spawn.asset_path,
-    reference_prim_path="/World/envs/env_.*/RobotReference/torso_link",
-    data_class_type=HoiMotionReferenceData,
-    state_class_type=HoiMotionReferenceState,
+    prim_path="{ENV_REGEX_NS}/Robot",
+    robot_model_path=G1_CFG.spawn.source_urdf_path,
+    reference_prim_path="/World/envs/env_.*/RobotReference",
+    data_class_type="instinctlab.motion_reference.motion_reference_hoi_data:HoiMotionReferenceData",
+    state_class_type="instinctlab.motion_reference.motion_reference_hoi_data:HoiMotionReferenceState",
     scene_object_names=list(MESH_FILE_PATHS.keys()),
     link_of_interests=[
         "pelvis",
@@ -114,6 +116,7 @@ class G1PerceptiveHoiShadowingEnvCfg(perceptual_cfg.PerceptiveHoiShadowingEnvCfg
 
     def __post_init__(self):
         super().__post_init__()
+        configure_g1_29dof_policy_io(self)
 
         # add mesh objects as scene rigid objects
         for object_name, mesh_file_path in MESH_FILE_PATHS.items():
@@ -133,7 +136,9 @@ class G1PerceptiveHoiShadowingEnvCfg(perceptual_cfg.PerceptiveHoiShadowingEnvCfg
                 ),
             )
 
-        self.scene.camera.mesh_prim_paths.extend(get_link_prim_targets(G1_29DOF_LINKS))
+        self.scene.height_scanner.prim_path = urdf_importer_link_prim_path(G1_CFG.spawn.source_urdf_path, "torso_link")
+        self.scene.camera.prim_path = urdf_importer_link_prim_path(G1_CFG.spawn.source_urdf_path, "torso_link")
+        self.scene.camera.mesh_prim_paths.extend(get_link_prim_targets(G1_29DOF_LINKS, G1_CFG.spawn.source_urdf_path))
         for object_name in list(MESH_FILE_PATHS.keys()):
             self.scene.camera.mesh_prim_paths.append(
                 MultiMeshRayCasterCfg.RaycastTargetCfg(prim_expr=f"/World/envs/env_.*/{object_name}")
@@ -174,8 +179,8 @@ class G1PerceptiveHoiShadowingEnvCfg_PLAY(G1PerceptiveHoiShadowingEnvCfg):
     )
 
     viewer: ViewerCfg = ViewerCfg(
-        eye=[1.5, 0.0, 1.5],
-        lookat=[0.0, 0.0, 0.0],
+        eye=(1.5, 0.0, 1.5),
+        lookat=(0.0, 0.0, 0.0),
         origin_type="asset_root",
         asset_name="robot",
     )
@@ -209,7 +214,6 @@ class G1PerceptiveHoiShadowingEnvCfg_PLAY(G1PerceptiveHoiShadowingEnvCfg):
         # put the reference in scene and move the robot elsewhere and visualize the reference
         self.events.reset_robot.params["position_offset"] = [0.0, 1.0, 2.0]
         self.scene.motion_reference.visualizing_robot_offset = (0.0, 0.0, 0.0)
-        self.viewer.asset_name = "robot_reference"
 
         # remove some randomizations
         self.events.add_joint_default_pos = None
@@ -231,32 +235,32 @@ class G1PerceptiveHoiShadowingEnvCfg_PLAY(G1PerceptiveHoiShadowingEnvCfg):
 
         # add some additional monitor terms
         self.monitors.shadowing_position_stats = MonitorTermCfg(
-            func=ShadowingBasePosMonitorTerm,
+            func="instinctlab.monitors.monitors:ShadowingBasePosMonitorTerm",
             params=dict(
                 robot_cfg=SceneEntityCfg("robot"),
                 motion_reference_cfg=SceneEntityCfg("motion_reference"),
             ),
         )
         self.monitors.right_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_ankle_pitch.*"),
             ),
         )
         self.monitors.left_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_ankle_pitch.*"),
             ),
         )
         self.monitors.right_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_knee.*"),
             ),
         )
         self.monitors.left_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_knee.*"),
             ),

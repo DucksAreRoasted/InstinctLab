@@ -32,6 +32,6 @@ def grid3d_points_generator(points_generator_cfg: Grid3dPointsGeneratorCfg) -> t
         points_generator_cfg.z_num,
     )
 
-    grid_x, grid_y, grid_z = torch.meshgrid(x, y, z)
+    grid_x, grid_y, grid_z = torch.meshgrid(x, y, z, indexing="ij")
 
     return torch.stack([grid_x, grid_y, grid_z], dim=-1).reshape(-1, 3)

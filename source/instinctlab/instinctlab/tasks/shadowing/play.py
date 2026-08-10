@@ -1,12 +1,8 @@
 """Script to play a checkpoint if an RL agent from Instinct-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
 import subprocess
 import sys
-
-from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
@@ -74,18 +70,19 @@ parser.add_argument(
 
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
+# append simulation launcher cli args
+from isaaclab_tasks.utils import add_launcher_args  # isort: skip
+
+add_launcher_args(parser)
 args_cli = parser.parse_args()
+# TODO: Remove this workaround once Isaac Lab initializes `/isaaclab/has_gui` itself.
+# release/3.0.0-beta2 leaves it unset, preventing the Kit `IsaacLab` window and live monitors
+# from being created. This setting concerns the Kit GUI only, not the selected physics backend.
+if "kit" in (args_cli.visualizer or []):
+    args_cli.kit_args = f"{args_cli.kit_args} --/isaaclab/has_gui=true".strip()
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
-"""Rest everything follows."""
 
 import gymnasium as gym
 import numpy as np
@@ -96,15 +93,12 @@ import torch
 from instinct_rl.runners import OnPolicyRunner
 
 import isaaclab.utils.math as math_utils
-from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.io import load_yaml
-from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
+from isaaclab_tasks.utils import get_checkpoint_path, launch_simulation, parse_env_cfg
 
 # Import extensions to set up environment tasks
 import instinctlab.tasks  # noqa: F401
-from instinctlab.managers.reward_manager import MultiRewardManager
-from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
 from instinctlab.utils.wrappers.instinct_rl import InstinctRlOnPolicyRunnerCfg
 
 # wait for attach if in debug mode
@@ -165,12 +159,28 @@ def main():
     else:
         agent_cfg_dict = agent_cfg.to_dict()
 
-    # set viewer resolution to 1080p for video recording
+    # configure the environment-owned recorder before environment construction
     if args_cli.video:
-        env_cfg.viewer.resolution = (1920, 1080)
+        env_cfg.video_recorder.backend_source = "visualizer"
+        env_cfg.video_recorder.window_width = 1920
+        env_cfg.video_recorder.window_height = 1080
+
+    with launch_simulation(env_cfg, args_cli):
+        return _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir, resume_path)
+
+
+def _run_play(env_cfg, agent_cfg, agent_cfg_dict, log_dir: str, resume_path: str):
+    """Run shadowing policy inference inside an active simulation runtime."""
+    from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
+
+    from instinctlab.managers.reward_manager import MultiRewardManager
+    from instinctlab.utils.wrappers import InstinctRlVecEnvWrapper
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    viewport_camera_controller = env.unwrapped.viewport_camera_controller
+    if args_cli.cam_rotate_speed is not None and viewport_camera_controller is None:
+        raise RuntimeError("--cam_rotate_speed requires --viz kit so Isaac Lab creates a viewport camera controller.")
     # wrap for video recording
     if args_cli.video:
         video_kwargs = {
@@ -247,7 +257,7 @@ def main():
     print(env.unwrapped.monitor_manager)
     total_success = 0
     total_traj = 0
-    while simulation_app.is_running():
+    while True:
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
@@ -326,22 +336,21 @@ def main():
                 # randomize_pose_range_x | randomize_pose_range_y | total_success | total_traj # the first two, see: perceptive_shadowing_cfg.py
                 break
 
-        if args_cli.cam_rotate_speed is not None and env.unwrapped.viewport_camera_controller is not None:
-            assert env_cfg.viewer.origin_type == "world", "Camera rotation is only supported for world origin type."
-            # rotate the camera at the speed of args_cli.cam_rotate_speed
-            lookat = np.array(env_cfg.viewer.lookat)
-            eye_offset = np.array(env_cfg.viewer.eye) - lookat
-            # update the eye_offset x-y coordinates by rotating around the lookat point at the speed of args_cli.cam_rotate_speed
+        if args_cli.cam_rotate_speed is not None:
+            # ViewerCfg eye/lookat are offsets from the controller's current asset-root origin.
+            lookat = np.asarray(env_cfg.viewer.lookat)
+            eye_offset = np.asarray(env_cfg.viewer.eye) - lookat
+            angle = args_cli.cam_rotate_speed * timestep * env.unwrapped.step_dt
             rotmat = np.array(
                 [
-                    [np.cos(args_cli.cam_rotate_speed * timestep), -np.sin(args_cli.cam_rotate_speed * timestep), 0],
-                    [np.sin(args_cli.cam_rotate_speed * timestep), np.cos(args_cli.cam_rotate_speed * timestep), 0],
+                    [np.cos(angle), -np.sin(angle), 0],
+                    [np.sin(angle), np.cos(angle), 0],
                     [0, 0, 1],
                 ]
             )
             eye_offset = rotmat @ eye_offset
             eye = lookat + eye_offset
-            env.unwrapped.viewport_camera_controller.update_view_location(eye=eye, lookat=lookat)
+            viewport_camera_controller.update_view_location(eye=eye, lookat=lookat)
 
     # close the simulator
     env.close()
@@ -373,10 +382,8 @@ if __name__ == "__main__":
             {"x": args_cli.x_offset, "y": args_cli.y_offset, "total_success": total_success, "total_traj": total_traj}
         )
         print(f"x: {x}, y: {y}, total_success: {total_success}, total_traj: {total_traj}")
-        # close sim app
         csv_file = "grid_search_results.csv"
         df = pd.DataFrame(results)
 
         file_exists = os.path.isfile(csv_file)
         df.to_csv(csv_file, mode="a", header=not file_exists, index=False)
-    simulation_app.close()

@@ -179,7 +179,7 @@ def maskout_joint_ref(
     # generate meshgrid for env_ids and joint_ids
     if isinstance(joint_ids, (list, tuple)):
         joint_ids = torch.tensor(joint_ids, dtype=torch.long, device=motion_reference.device)
-    env_ids_, joint_ids_ = torch.meshgrid(env_ids, joint_ids)
+    env_ids_, joint_ids_ = torch.meshgrid(env_ids, joint_ids, indexing="ij")
     env_ids_ = env_ids_.reshape(-1)
     joint_ids_ = joint_ids_.reshape(-1)
     # mask out the wrist reference data
@@ -203,7 +203,7 @@ def maskout_link_ref(
     motion_reference: MotionReferenceManager = env.scene[motion_ref_cfg.name]
     # generate meshgrid for env_ids and link_ids
     link_ids = torch.tensor(motion_ref_cfg.body_ids, dtype=torch.long, device=env_ids.device)
-    env_ids_, link_ids_ = torch.meshgrid(env_ids, link_ids)
+    env_ids_, link_ids_ = torch.meshgrid(env_ids, link_ids, indexing="ij")
     env_ids_ = env_ids_.reshape(-1)
     link_ids_ = link_ids_.reshape(-1)
     # mask out the link reference data
@@ -278,8 +278,8 @@ def reset_robot_state_by_reference_gaussian_randomization_scale(
         base_quat_w = motion_ref_init_state.base_quat_w
 
     # write the root pose to the simulation
-    asset.write_root_pose_to_sim(
-        torch.cat(
+    asset.write_root_pose_to_sim_index(
+        root_pose=torch.cat(
             [
                 base_pos_w,
                 base_quat_w,
@@ -306,8 +306,8 @@ def reset_robot_state_by_reference_gaussian_randomization_scale(
         base_ang_vel_w += vel_samples[:, 3:6]
 
     # write the root velocity to the simulation
-    asset.write_root_velocity_to_sim(
-        torch.cat(
+    asset.write_root_velocity_to_sim_index(
+        root_velocity=torch.cat(
             [
                 base_lin_vel_w,
                 base_ang_vel_w,
@@ -329,8 +329,8 @@ def reset_robot_state_by_reference_gaussian_randomization_scale(
         joint_pos += joint_pos_noise
 
     # write the joint state to the simulation
-    asset.write_joint_state_to_sim(
-        joint_pos,
-        joint_vel,
+    asset.write_joint_state_to_sim_index(
+        position=joint_pos,
+        velocity=joint_vel,
         env_ids=env_ids,
     )

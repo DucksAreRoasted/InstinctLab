@@ -6,7 +6,7 @@ task_entry = "instinctlab.tasks.shadowing.perceptive.config.g1"
 
 gym.register(
     id="Instinct-Perceptive-Shadowing-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.perceptive_shadowing_cfg:G1PerceptiveShadowingEnvCfg",
@@ -17,7 +17,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Perceptive-Shadowing-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.perceptive_shadowing_cfg:G1PerceptiveShadowingEnvCfg_PLAY",
@@ -28,7 +28,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Perceptive-Vae-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.perceptive_vae_cfg:G1PerceptiveVaeEnvCfg",
@@ -38,7 +38,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Perceptive-Vae-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.perceptive_vae_cfg:G1PerceptiveVaeEnvCfg_PLAY",

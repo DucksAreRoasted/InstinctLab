@@ -2,7 +2,7 @@ import os
 from copy import copy
 from torch.backends.cuda import enable_flash_sdp, enable_mem_efficient_sdp
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from instinctlab.utils.wrappers.instinct_rl import (
     InstinctRlActorCriticCfg,

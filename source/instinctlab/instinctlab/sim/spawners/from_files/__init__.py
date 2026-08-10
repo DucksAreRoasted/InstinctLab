@@ -3,7 +3,6 @@
 
 """Sub-module for spawning assets from mesh files (OBJ, STL, FBX)."""
 
-from .from_files import spawn_from_mesh
-from .from_files_cfg import MeshFileCfg
+from .from_files_cfg import MeshFileCfg, UrdfFileCfg, UsdFileCfg
 
-__all__ = ["spawn_from_mesh", "MeshFileCfg"]
+__all__ = ["MeshFileCfg", "UrdfFileCfg", "UsdFileCfg"]

@@ -12,15 +12,19 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.utils.configclass import configclass
+from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.locomotion.mdp as locomotion_mdp
-from instinctlab.assets.unitree_g1 import G1_29DOF_TORSOBASE_POPSICLE_CFG, beyondmimic_action_scale
+from instinctlab.assets.unitree_g1 import (
+    G1_29DOF_TORSOBASE_POPSICLE_CFG,
+    beyondmimic_action_scale,
+    configure_g1_29dof_policy_io,
+)
+from instinctlab.sensors import HierarchicalContactSensorCfg
 
 G1_CFG = G1_29DOF_TORSOBASE_POPSICLE_CFG
 
@@ -45,7 +49,9 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
     robot = G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    contact_forces = HierarchicalContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
         spawn=sim_utils.DomeLightCfg(
@@ -355,6 +361,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
     )
 
     def __post_init__(self):
+        configure_g1_29dof_policy_io(self)
         self.decimation = 4
         self.episode_length_s = 20.0
         self.sim.dt = 0.005

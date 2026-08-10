@@ -39,7 +39,7 @@ class MotionSequence:
     base_quat_w: torch.Tensor = None  # type: ignore
     """ Quaternions of the base of the robot model.
 
-    Shape: [N, num_frames, 4], N is the batch size.
+    Shape: [N, num_frames, 4], in (x, y, z, w), N is the batch size.
     """
 
     base_ang_vel_w: torch.Tensor = None  # type: ignore
@@ -71,7 +71,7 @@ class MotionSequence:
     """ The quaternions of the interested links (w.r.t the base).
     NOTE: This is a passive parameter computed from joint_poss.
 
-    Shape: [N, num_frames, num_links, 4], N is the batch size.
+    Shape: [N, num_frames, num_links, 4], in (x, y, z, w), N is the batch size.
     """
 
     link_pos_w: torch.Tensor = None  # type: ignore
@@ -84,7 +84,7 @@ class MotionSequence:
     link_quat_w: torch.Tensor = None  # type: ignore
     """ The quaternions of the interested links (w.r.t the world).
 
-    Shape: [N, num_frames, num_links, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, num_links, 4], in (x, y, z, w), N is the batch size.
     """
 
     link_lin_vel_b: torch.Tensor = None  # type: ignore
@@ -155,9 +155,9 @@ class MotionSequence:
             link_lin_vel_w=torch.zeros(batch_size, num_frames, num_links, 3, device=device),
             link_ang_vel_w=torch.zeros(batch_size, num_frames, num_links, 3, device=device),
         )
-        return_.base_quat_w[:, :, 0] = 1.0  # Set the w component of the quaternion to 1.0
-        return_.link_quat_b[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.link_quat_w[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
+        return_.base_quat_w[:, :, 3] = 1.0
+        return_.link_quat_b[:, :, :, 3] = 1.0
+        return_.link_quat_w[:, :, :, 3] = 1.0
         return return_
 
     @staticmethod
@@ -205,10 +205,10 @@ class MotionSequence:
                 batch_sizes=buffer_lengths, data_shape=(num_links, 3), device=device
             ),  # type: ignore
         )
-        # Set the w component of the quaternion to 1.0
-        return_.base_quat_w.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device))  # type: ignore
-        return_.link_quat_b.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device).unsqueeze(0).expand(num_links, -1))  # type: ignore
-        return_.link_quat_w.fill_data(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device).unsqueeze(0).expand(num_links, -1))  # type: ignore
+        identity_quat = torch.tensor([0.0, 0.0, 0.0, 1.0], device=device)
+        return_.base_quat_w.fill_data(identity_quat)  # type: ignore
+        return_.link_quat_b.fill_data(identity_quat.unsqueeze(0).expand(num_links, -1))  # type: ignore
+        return_.link_quat_w.fill_data(identity_quat.unsqueeze(0).expand(num_links, -1))  # type: ignore
         return return_
 
     def __post_init__(self):
@@ -265,7 +265,7 @@ class MotionReferenceData:
     base_quat_w: torch.Tensor = None  # type: ignore
     """ Quaternions of the base of the robot model.
 
-    Shape: [N, num_frames, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, 4], in (x, y, z, w), N is the batch size.
     """
 
     base_ang_vel_w: torch.Tensor = None  # type: ignore
@@ -297,7 +297,7 @@ class MotionReferenceData:
     """ The quaternions of the interested links (w.r.t the base when sensor refreshes).
     NOTE: This is a passive parameter computed from base_pos, base_quat, and joint_poss.
 
-    Shape: [N, num_frames, num_links, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, num_links, 4], in (x, y, z, w), N is the batch size.
     """
 
     link_pos_w: torch.Tensor = None  # type: ignore
@@ -310,7 +310,7 @@ class MotionReferenceData:
     link_quat_w: torch.Tensor = None  # type: ignore
     """ The quaternions of the interested links (w.r.t the world).
 
-    Shape: [N, num_frames, num_links, 4], in (w, x, y, z), N is the batch size.
+    Shape: [N, num_frames, num_links, 4], in (x, y, z, w), N is the batch size.
     """
 
     link_lin_vel_b: torch.Tensor = None  # type: ignore
@@ -397,9 +397,9 @@ class MotionReferenceData:
             time_to_target_frame=torch.zeros(num_envs, num_frames, device=device),
             validity=torch.zeros(num_envs, num_frames, dtype=torch.bool, device=device),
         )
-        return_.base_quat_w[:, :, 0] = 1.0  # Set the w component of the quaternion to 1.0
-        return_.link_quat_b[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
-        return_.link_quat_w[:, :, :, 0] = 1.0  # Set the w component of the link quaternions to 1.0
+        return_.base_quat_w[:, :, 3] = 1.0
+        return_.link_quat_b[:, :, :, 3] = 1.0
+        return_.link_quat_w[:, :, :, 3] = 1.0
         return return_
 
     def reset(self, env_ids: Sequence[int] | torch.Tensor) -> None:
@@ -418,7 +418,7 @@ class MotionReferenceData:
             else:
                 tensor[env_ids] = 0
                 if "quat" in field.name:
-                    tensor[env_ids, ..., 0] = 1.0
+                    tensor[env_ids, ..., 3] = 1.0
 
 
 @dataclass
@@ -467,7 +467,7 @@ class MotionReferenceState:
             base_lin_vel_w=torch.zeros(num_envs, 3, device=device),
             base_ang_vel_w=torch.zeros(num_envs, 3, device=device),
         )
-        return_.base_quat_w[:, 0] = 1.0
+        return_.base_quat_w[:, 3] = 1.0
         return return_
 
     def __getitem__(self, idx: Sequence[int] | torch.Tensor | None):

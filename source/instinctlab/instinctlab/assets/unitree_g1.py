@@ -7,51 +7,86 @@ import os
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.managers import SceneEntityCfg
 from isaaclab_assets import G1_CFG
 
-from instinctlab.motion_reference import NoCollisionPropertiesCfg
+from instinctlab.sim import UrdfFileCfg, UsdFileCfg
+
+from .g1_popsicle_asset import G1_POPSICLE_ASSET_DIGEST, G1_POPSICLE_USD_PATH
+from .g1_popsicle_asset import SOURCE_URDF_PATH as G1_POPSICLE_SOURCE_URDF_PATH
 
 __file_dir__ = os.path.dirname(os.path.realpath(__file__))
 
-"""
-joint name order:
-[
-    'left_shoulder_pitch_joint',
-    'right_shoulder_pitch_joint',
-    'waist_pitch_joint',
-    'left_shoulder_roll_joint',
-    'right_shoulder_roll_joint',
-    'waist_roll_joint',
-    'left_shoulder_yaw_joint',
-    'right_shoulder_yaw_joint',
-    'waist_yaw_joint',
-    'left_elbow_joint',
-    'right_elbow_joint',
-    'left_hip_pitch_joint',
-    'right_hip_pitch_joint',
-    'left_wrist_roll_joint',
-    'right_wrist_roll_joint',
-    'left_hip_roll_joint',
-    'right_hip_roll_joint',
-    'left_wrist_pitch_joint',
-    'right_wrist_pitch_joint',
-    'left_hip_yaw_joint',
-    'right_hip_yaw_joint',
-    'left_wrist_yaw_joint',
-    'right_wrist_yaw_joint',
-    'left_knee_joint',
-    'right_knee_joint',
-    'left_ankle_pitch_joint',
-    'right_ankle_pitch_joint',
-    'left_ankle_roll_joint',
-    'right_ankle_roll_joint',
+G1_29DOF_JOINT_NAMES = [
+    "left_shoulder_pitch_joint",
+    "right_shoulder_pitch_joint",
+    "waist_pitch_joint",
+    "left_shoulder_roll_joint",
+    "right_shoulder_roll_joint",
+    "waist_roll_joint",
+    "left_shoulder_yaw_joint",
+    "right_shoulder_yaw_joint",
+    "waist_yaw_joint",
+    "left_elbow_joint",
+    "right_elbow_joint",
+    "left_hip_pitch_joint",
+    "right_hip_pitch_joint",
+    "left_wrist_roll_joint",
+    "right_wrist_roll_joint",
+    "left_hip_roll_joint",
+    "right_hip_roll_joint",
+    "left_wrist_pitch_joint",
+    "right_wrist_pitch_joint",
+    "left_hip_yaw_joint",
+    "right_hip_yaw_joint",
+    "left_wrist_yaw_joint",
+    "right_wrist_yaw_joint",
+    "left_knee_joint",
+    "right_knee_joint",
+    "left_ankle_pitch_joint",
+    "right_ankle_pitch_joint",
+    "left_ankle_roll_joint",
+    "right_ankle_roll_joint",
 ]
-"""
+"""Policy and motion-augmentation joint order used by Isaac Lab 2.3.2 experiments."""
+
+
+def configure_g1_29dof_policy_io(env_cfg) -> None:
+    """Keep policy-facing joint tensors independent of the imported USD joint order."""
+    env_cfg.actions.joint_pos.joint_names = G1_29DOF_JOINT_NAMES.copy()
+    env_cfg.actions.joint_pos.preserve_order = True
+
+    for group_name in ("policy", "critic", "amp_policy", "amp_reference"):
+        observation_group = getattr(env_cfg.observations, group_name, None)
+        if observation_group is None:
+            continue
+        entity_name = "motion_reference" if group_name == "amp_reference" else "robot"
+        for term_name in ("joint_pos", "joint_vel", "joint_pos_rel"):
+            observation_term = getattr(observation_group, term_name, None)
+            if observation_term is not None:
+                observation_term.params["asset_cfg"] = SceneEntityCfg(
+                    entity_name,
+                    joint_names=G1_29DOF_JOINT_NAMES.copy(),
+                    preserve_order=True,
+                )
+
+    for command_name in ("joint_pos_ref_command", "joint_vel_ref_command"):
+        command = getattr(env_cfg.commands, command_name, None)
+        if command is not None:
+            command.asset_cfg = SceneEntityCfg(
+                "robot",
+                joint_names=G1_29DOF_JOINT_NAMES.copy(),
+                preserve_order=True,
+            )
+
+    motion_reference = getattr(env_cfg.scene, "motion_reference", None)
+    if motion_reference is not None:
+        motion_reference.symmetric_augmentation_joint_names = G1_29DOF_JOINT_NAMES.copy()
+
 
 G1_29DOF_TORSOBASE_CFG = G1_CFG.copy()
-G1_29DOF_TORSOBASE_CFG.spawn = sim_utils.UrdfFileCfg(
+G1_29DOF_TORSOBASE_CFG.spawn = UrdfFileCfg(
     asset_path=os.path.join(__file_dir__, "resources/unitree_g1/urdf/g1_29dof_torsobase_simplified.urdf"),
-    replace_cylinders_with_capsules=False,
     merge_fixed_joints=False,
     fix_base=False,
     self_collision=True,
@@ -171,14 +206,13 @@ G1_29DOF_TORSOBASE_CFG.init_state.joint_pos = {
 }
 
 G1_29DOF_TORSOBASE_CLOG_CFG = G1_29DOF_TORSOBASE_CFG.copy()
-G1_29DOF_TORSOBASE_CLOG_CFG.spawn = sim_utils.UrdfFileCfg(
+G1_29DOF_TORSOBASE_CLOG_CFG.spawn = UrdfFileCfg(
     asset_path=os.path.join(__file_dir__, "resources/unitree_g1/urdf/g1_29dof_torsobase_clog.urdf"),
-    replace_cylinders_with_capsules=False,
     merge_fixed_joints=False,
     fix_base=False,
     self_collision=True,
     activate_contact_sensors=True,
-    collider_type="convex_decomposition",
+    collision_type="Convex Decomposition",
 )
 G1_29DOF_TORSOBASE_CLOG_CFG.spawn.joint_drive.gains.stiffness = None  # use value from the URDF file
 
@@ -534,10 +568,11 @@ for a in beyondmimic_g1_29dof_actuators.values():
             beyondmimic_action_scale[n] = 0.25 * e[n] / s[n]
 
 G1_29DOF_TORSOBASE_POPSICLE_CFG = ArticulationCfg(
-    spawn=sim_utils.UrdfFileCfg(
-        fix_base=False,
-        replace_cylinders_with_capsules=True,
-        asset_path=f"{__file_dir__}/resources/unitree_g1/urdf/g1_29dof_torsobase_popsicle.urdf",
+    spawn=UsdFileCfg(
+        usd_path=G1_POPSICLE_USD_PATH,
+        source_urdf_path=str(G1_POPSICLE_SOURCE_URDF_PATH),
+        required_asset_digest=G1_POPSICLE_ASSET_DIGEST,
+        build_command="python scripts/assets/build_g1_popsicle.py --viz none",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -550,9 +585,6 @@ G1_29DOF_TORSOBASE_POPSICLE_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
-        ),
-        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(

@@ -17,7 +17,7 @@ https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/ext_isaacsim_asset
 
 positional arguments:
   input               The path to the input URDF file.
-  output              The path to store the USD file.
+  output_dir          The directory in which Importer 3 writes the generated asset folder.
 
 optional arguments:
   -h, --help                Show this help message and exit
@@ -38,7 +38,7 @@ from isaaclab.app import AppLauncher
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Utility to convert a URDF into USD format.")
 parser.add_argument("input", type=str, help="The path to the input URDF file.")
-parser.add_argument("output", type=str, help="The path to store the USD file.")
+parser.add_argument("output_dir", type=str, help="Directory in which to generate the USD asset folder.")
 parser.add_argument(
     "--merge-joints",
     action="store_true",
@@ -81,7 +81,6 @@ import contextlib
 import os
 
 import carb
-import isaacsim.core.utils.stage as stage_utils
 import omni.kit.app
 
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg
@@ -97,24 +96,22 @@ def main():
     if not check_file_path(urdf_path):
         raise ValueError(f"Invalid file path: {urdf_path}")
     # create destination path
-    dest_path = args_cli.output
-    if not os.path.isabs(dest_path):
-        dest_path = os.path.abspath(dest_path)
+    output_dir = args_cli.output_dir
+    if not os.path.isabs(output_dir):
+        output_dir = os.path.abspath(output_dir)
 
     # Create Urdf converter config
     urdf_converter_cfg = UrdfConverterCfg(
         asset_path=urdf_path,
-        usd_dir=os.path.dirname(dest_path),
-        usd_file_name=os.path.basename(dest_path),
-        replace_cylinders_with_capsules=False,
-        merge_fixed_joints=False,
-        fix_base=False,
+        usd_dir=output_dir,
+        merge_fixed_joints=args_cli.merge_joints,
+        fix_base=args_cli.fix_base,
         self_collision=False,
         force_usd_conversion=True,
         joint_drive=UrdfConverterCfg.JointDriveCfg(
             gains=UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
-                stiffness=None,
-                damping=None,
+                stiffness=args_cli.joint_stiffness,
+                damping=args_cli.joint_damping,
             ),
             target_type=args_cli.joint_target_type,
         ),
@@ -133,7 +130,8 @@ def main():
     urdf_converter = UrdfConverter(urdf_converter_cfg)
     # print output
     print("URDF importer output:")
-    print(f"Generated USD file: {urdf_converter.usd_path}")
+    print(f"Generated USD root: {urdf_converter.usd_path}")
+    print(f"Generated asset directory: {os.path.dirname(urdf_converter.usd_path)}")
     print("-" * 80)
     print("-" * 80)
 
@@ -147,8 +145,10 @@ def main():
 
     # Simulate scene (if not headless)
     if local_gui or livestream_gui:
-        # Open the stage with USD
-        stage_utils.open_stage(urdf_converter.usd_path)
+        # Open the stage with USD and attach it to the Kit viewport context.
+        import omni.usd
+
+        omni.usd.get_context().open_stage(urdf_converter.usd_path)
         # Reinitialize the simulation
         app = omni.kit.app.get_app_interface()
         # Run simulation

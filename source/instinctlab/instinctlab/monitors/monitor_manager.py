@@ -6,8 +6,6 @@ from abc import abstractmethod
 from prettytable import PrettyTable
 from typing import TYPE_CHECKING, Sequence
 
-import omni.physics.tensors.impl.api as physx
-
 from isaaclab.managers import ManagerBase, ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import SensorBase
 
@@ -22,7 +20,11 @@ class MonitorSensor(SensorBase):
 
     def _initialize_impl(self):
         super()._initialize_impl()
-        self._physics_sim_view = physx.create_simulation_view(self._backend)
+
+        # Import the backend only after launch_simulation has initialized Kit.
+        from isaaclab_physx.physics import PhysxManager
+
+        self._physics_sim_view = PhysxManager.get_physics_sim_view()
 
     # def _update_buffers_impl(self, env_ids: Sequence[int]):
 

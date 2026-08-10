@@ -13,14 +13,14 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
     # NOTE: Add dependencies
-    "psutil",
     "pytorch_kinematics",
     "joblib",
     "debugpy",
     "snakeviz",
-    "trimesh[all]",
+    "trimesh",
     "scikit-learn",
     "opencv-python",
+    "onnxruntime>=1.20,<2",
     "pyvista",
 ]
 
@@ -37,11 +37,11 @@ setup(
     install_requires=INSTALL_REQUIRES,
     license="MIT",
     include_package_data=True,
-    python_requires=">=3.11",
+    python_requires=">=3.12,<3.13",
     classifiers=[
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.11",
-        "Isaac Sim :: 5.1.0",
+        "Programming Language :: Python :: 3.12",
+        "Isaac Sim :: 6.0.1",
     ],
     zip_safe=False,
 )

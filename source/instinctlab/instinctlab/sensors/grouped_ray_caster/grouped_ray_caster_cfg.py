@@ -1,18 +1,14 @@
-from dataclasses import MISSING
-
-from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.markers.config import RAY_CASTER_MARKER_CFG
 from isaaclab.sensors.ray_caster import MultiMeshRayCasterCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from .grouped_ray_caster import GroupedRayCaster
+from instinctlab.utils.urdf import urdf_importer_link_prim_path
 
 
 @configclass
 class GroupedRayCasterCfg(MultiMeshRayCasterCfg):
     """Configuration for the GroupedRayCaster sensor."""
 
-    class_type: type = GroupedRayCaster
+    class_type: type | str = "{DIR}.grouped_ray_caster:GroupedRayCaster"
 
     min_distance: float = 0.0
     """The minimum distance from the sensor to ray cast to. aka ignore the hits closer than this distance."""
@@ -20,15 +16,21 @@ class GroupedRayCasterCfg(MultiMeshRayCasterCfg):
 
 def get_link_prim_targets(
     links: list[str],
-    prefix: str = "/World/envs/env_.*/Robot/",
-    suffix: str = "/visuals",
+    urdf_path: str,
+    asset_prim_path: str = "/World/envs/env_.*/Robot",
     is_shared=True,  # whether the target prim is assumed to be the same mesh across all environments.
     **kwargs: dict,
 ) -> list[MultiMeshRayCasterCfg.RaycastTargetCfg]:
-    """Build the raycast target given the list of links. It will combine and return a list of
-    MultiMeshRayCasterCfg.RaycastTargetCfg.
+    """Build ray-cast targets for link geometry imported by URDF importer 3.0.
+
+    The custom caster reads visual geometry owned by each selected rigid link while
+    excluding collision geometry and descendant links.
     """
     return [
-        MultiMeshRayCasterCfg.RaycastTargetCfg(prim_expr=f"{prefix}{link}{suffix}", is_shared=is_shared, **kwargs)
+        MultiMeshRayCasterCfg.RaycastTargetCfg(
+            prim_expr=urdf_importer_link_prim_path(urdf_path, link, asset_prim_path),
+            is_shared=is_shared,
+            **kwargs,
+        )
         for link in links
     ]

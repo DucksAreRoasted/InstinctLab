@@ -1,8 +1,8 @@
 # Project Instinct
 
-[![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html)
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-silver)](https://isaac-sim.github.io/IsaacLab)
-[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
+[![IsaacSim](https://img.shields.io/badge/IsaacSim-6.0.1-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0.0--beta2-silver)](https://isaac-sim.github.io/IsaacLab)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://docs.python.org/3/whatsnew/3.12.html)
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/20.04/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
@@ -33,7 +33,7 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
 
 ## Installation
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) and **Switch to 5.1.0 version**. We recommend using the conda installation as it simplifies calling Python scripts from the terminal. The IsaacLab commit we are using is `f73c331738` on origin/main (post-v2.3.2).
+- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) and check out `release/3.0.0-beta2`. The pinned revision for this migration is `6a7acb0320a0bdc15b13e44e83b575e00797faf4`, with Isaac Sim 6.0.1 and Python 3.12.
 
 - Install Instinct-RL by following the [installation guide](https://github.com/project-instinct/instinct_rl/blob/main/README.md).
     TL; DR;
@@ -58,10 +58,25 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
     python -m pip install -e source/instinctlab
     ```
 
+- Build the two immutable G1 popsicle USD assets before running a task that uses them:
+
+    ```bash
+    python scripts/assets/build_g1_popsicle.py --viz none
+    ```
+
+    This is an offline asset build, not part of training. It runs the standard Isaac Lab 3.0 URDF
+    converter, replaces the 28 manifest-selected collision cylinders with analytic capsules, and
+    validates the result before publishing it under
+    `~/.cache/instinctlab/assets/<variant>/<asset-digest>/`. Set `INSTINCTLAB_ASSET_CACHE` to use a
+    shared cache. Training loads the digest-scoped final USD and records its path and required
+    digest in the experiment config; it never creates or versions intermediate USD files. Rebuild
+    only when a hashed source URDF, mesh, manifest, converter configuration, or builder version
+    changes. Use `--variant base` or `--variant shoe` to build only one variant.
+
 - To run with `instinct-rl`, you can use the following command after installing [instinct-rl](https://github.com/project-instinct/instinct_rl):
 
     ```bash
-    python scripts/instinct_rl/train.py --task=Instinct-Shadowing-WholeBody-Plane-G1-Play-v0 --headless
+    python scripts/instinct_rl/train.py --task=Instinct-Shadowing-WholeBody-Plane-G1-Play-v0 --viz none
     ```
 
 ## Documentation of Critical Components

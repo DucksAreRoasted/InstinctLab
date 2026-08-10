@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal, Sequence
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,7 +19,7 @@ from .amass_motion import AmassMotion
 class AmassMotionCfg(MotionBufferCfg):
     """Configuration for the AMAS formatted motion data"""
 
-    class_type: type = AmassMotion
+    class_type: type | str = "{DIR}.amass_motion:AmassMotion"
 
     path: str = MISSING  # type: ignore
     """ the path to the motion dataset """

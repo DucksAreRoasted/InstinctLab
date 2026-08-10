@@ -3,6 +3,6 @@
 
 """InstinctLab extensions to Isaac Lab sim utilities."""
 
-from .spawners import MeshFileCfg, spawn_from_mesh
+from .spawners import MeshFileCfg, UrdfFileCfg, UsdFileCfg
 
-__all__ = ["MeshFileCfg", "spawn_from_mesh"]
+__all__ = ["MeshFileCfg", "UrdfFileCfg", "UsdFileCfg"]

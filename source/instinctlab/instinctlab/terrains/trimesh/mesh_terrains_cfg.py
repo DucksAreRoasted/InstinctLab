@@ -2,7 +2,7 @@ from dataclasses import MISSING
 from typing import List
 
 from isaaclab.terrains.terrain_generator_cfg import SubTerrainBaseCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from ..height_field import PerlinPlaneTerrainCfg
 from . import mesh_terrains

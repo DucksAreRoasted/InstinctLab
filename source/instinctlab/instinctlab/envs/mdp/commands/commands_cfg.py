@@ -6,8 +6,8 @@ import isaaclab.sim as sim_utils
 from isaaclab.managers import CommandTermCfg, SceneEntityCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG, RED_ARROW_X_MARKER_CFG
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 
 from .shadowing_command import (
     BaseHeightRefCommand,
@@ -35,7 +35,7 @@ from .shadowing_command import (
 class ShadowingCommandBaseCfg(CommandTermCfg):
     """Command space for the MDP."""
 
-    class_type: type = ShadowingCommandBase
+    class_type: type | str = "{DIR}.shadowing_command:ShadowingCommandBase"
 
     motion_reference: SceneEntityCfg = SceneEntityCfg("motion_reference")
     """ The configuration for accessing motion reference """
@@ -55,7 +55,7 @@ class ShadowingCommandBaseCfg(CommandTermCfg):
 class PoseRefCommandCfg(ShadowingCommandBaseCfg):
     """Command for base pose reference, w.r.t current robot/reference position."""
 
-    class_type: type = PoseRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:PoseRefCommand"
 
     anchor_frame: Literal["reference", "robot"] = "robot"
     """To generate local pose reference, the reference can be represented in either the robot's local frame or the
@@ -95,7 +95,7 @@ class PoseRefCommandCfg(ShadowingCommandBaseCfg):
 class PositionRefCommandCfg(ShadowingCommandBaseCfg):
     """Command for base position reference, w.r.t current robot/reference position."""
 
-    class_type: type = PositionRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:PositionRefCommand"
 
     anchor_frame: Literal["reference", "robot", "ref_rot_robot_pos", "ref_pos_robot_rot"] = "robot"
     """To generate local position reference, the reference can be represented in either the robot's local frame or the
@@ -120,7 +120,7 @@ class PositionRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class RotationRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = RotationRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:RotationRefCommand"
 
     rotation_mode: Literal["quaterion", "axis_angle", "euler", "tannorm"] = "axis_angle"
     """ n_dims:
@@ -152,7 +152,7 @@ class RotationRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class ProjectedGravityRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = ProjectedGravityRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:ProjectedGravityRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
         prim_path="/Visuals/ProjectedGravityRefCommand",
@@ -161,7 +161,7 @@ class ProjectedGravityRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class HeadingRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = HeadingRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:HeadingRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = RED_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/HeadingRefCommand",
@@ -172,7 +172,7 @@ class HeadingRefCommandCfg(ShadowingCommandBaseCfg):
 class HeadingErrorRefCommandCfg(ShadowingCommandBaseCfg):
     """Command for heading error reference, w.r.t current robot/reference position."""
 
-    class_type: type = HeadingErrorRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:HeadingErrorRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = RED_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/HeadingRefCommand",
@@ -186,7 +186,7 @@ class HeadingErrorRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class BaseHeightRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = BaseHeightRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:BaseHeightRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
         prim_path="/Visuals/BaseHeightRefCommand",
@@ -205,19 +205,19 @@ class BaseHeightRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class BaseLinVelRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = BaseLinVelRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:BaseLinVelRefCommand"
     """Command for base linear velocity reference, w.r.t current robot/reference position."""
 
 
 @configclass
 class JointPosRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = JointPosRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:JointPosRefCommand"
     """To get the robot's default joint positions."""
 
 
 @configclass
 class JointPosErrRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = JointPosErrRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:JointPosErrRefCommand"
 
     realtime_mode: bool = False
     """ Since this reference is represented in robot's local-frame, the reference can be updated
@@ -227,12 +227,12 @@ class JointPosErrRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class JointVelRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = JointVelRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:JointVelRefCommand"
 
 
 @configclass
 class LinkRefCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = LinkRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:LinkRefCommand"
 
     rotation_mode: Literal["quaterion", "axis_angle", "euler", "tannorm"] = "axis_angle"
     """ NOTE: link of interests are specified in MotionReferenceManagerCfg
@@ -261,7 +261,7 @@ class LinkRefCommandCfg(ShadowingCommandBaseCfg):
 
 @configclass
 class LinkPosRefCommandCfg(LinkRefCommandCfg):
-    class_type: type = LinkPosRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:LinkPosRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
         prim_path="/Visuals/LinkPosRefCommand",
@@ -276,14 +276,14 @@ class LinkPosRefCommandCfg(LinkRefCommandCfg):
 
 @configclass
 class LinkRotRefCommandCfg(LinkRefCommandCfg):
-    class_type: type = LinkRotRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:LinkRotRefCommand"
 
     visualizer_cfg: VisualizationMarkersCfg = None
 
 
 @configclass
 class LinkPosErrRefCommandCfg(LinkRefCommandCfg):
-    class_type: type = LinkPosErrRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:LinkPosErrRefCommand"
 
     realtime_mode: bool = False
     """ Since this reference is represented in robot's local-frame, the reference can be updated
@@ -304,7 +304,7 @@ class LinkPosErrRefCommandCfg(LinkRefCommandCfg):
 
 @configclass
 class LinkRotErrRefCommandCfg(LinkRefCommandCfg):
-    class_type: type = LinkRotErrRefCommand
+    class_type: type | str = "{DIR}.shadowing_command:LinkRotErrRefCommand"
 
     realtime_mode: bool = False
     """ Since this reference is represented in robot's local-frame, the reference can be updated
@@ -322,7 +322,7 @@ class LinkRotErrRefCommandCfg(LinkRefCommandCfg):
 
 @configclass
 class TimeToTargetCommandCfg(ShadowingCommandBaseCfg):
-    class_type: type = TimeToTargetCommand
+    class_type: type | str = "{DIR}.shadowing_command:TimeToTargetCommand"
 
     realtime_mode: bool = False
     """ In real-time mode, the time-to-target will always be the time currently to the target frame.

@@ -57,10 +57,15 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
             self.noise_pipeline.append(noise_cfg)
 
         # apply the noise pipeline to the initialized output buffers for noised output
+        env_ids = torch.arange(self.num_instances, device=self.device)
         for data_type in self.cfg.data_types:
             self._data.output[f"{data_type}_noised"] = self.apply_noise_pipeline(
-                self._data.output[data_type], env_ids=self._ALL_INDICES
+                self._output_as_torch(data_type), env_ids=env_ids
             )
+
+    def _output_as_torch(self, data_type: str) -> torch.Tensor:
+        output = self._data.output[data_type]
+        return output.torch if hasattr(output, "torch") else output
 
     def apply_noise_pipeline(self, data: torch.Tensor, env_ids: torch.Tensor | Sequence[int]) -> torch.Tensor:
         """Apply noise to the data(image).
@@ -82,8 +87,8 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
     def apply_noise_pipeline_to_all_data_types(self, env_ids: torch.Tensor | Sequence[int]):
         """Apply the noise pipeline to all data types."""
         for data_type in self.cfg.data_types:
-            self._data.output[f"{data_type}_noised"][env_ids] = self.apply_noise_pipeline(
-                self._data.output[data_type][env_ids], env_ids=env_ids
+            self._output_as_torch(f"{data_type}_noised")[env_ids] = self.apply_noise_pipeline(
+                self._output_as_torch(data_type)[env_ids], env_ids=env_ids
             )
 
     def reset_noise_pipeline(self, env_ids: Sequence[int] | None = None):
@@ -107,7 +112,7 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
             self.output_history_buffers[data_type] = AsyncCircularBuffer(
                 history_length, self.num_instances, self.device
             )
-            data_shape = self._data.output[data_type].shape
+            data_shape = self._output_as_torch(data_type).shape
             self._data.output[f"{data_type}_history"] = torch.zeros(
                 (data_shape[0], history_length, *data_shape[1:]), device=self.device
             )
@@ -118,8 +123,8 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
         outputs are computed.
         """
         for data_type in self.cfg.data_histories.keys():
-            self.output_history_buffers[data_type].append(self._data.output[data_type][env_ids], env_ids)
-            self._data.output[f"{data_type}_history"][env_ids] = self.output_history_buffers[data_type].__getitem__(
+            self.output_history_buffers[data_type].append(self._output_as_torch(data_type)[env_ids], env_ids)
+            self._output_as_torch(f"{data_type}_history")[env_ids] = self.output_history_buffers[data_type].__getitem__(
                 batch_ids=env_ids
             )
 

@@ -1,5 +1,7 @@
 from dataclasses import MISSING
 
+from isaaclab_physx.physics import PhysxCfg
+
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -10,25 +12,17 @@ from isaaclab.managers import RewardTermCfg as RewTermCfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTermCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.noise import UniformNoiseCfg
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.mdp as shadowing_mdp
 from instinctlab.envs.manager_based_rl_env_cfg import InstinctLabRLEnvCfg
 from instinctlab.managers import MultiRewardCfg
-from instinctlab.monitors import (
-    MonitorTermCfg,
-    MotionReferenceMonitorTerm,
-    ShadowingJointPosMonitorTerm,
-    ShadowingJointVelMonitorTerm,
-    ShadowingLinkPosMonitorTerm,
-    ShadowingPositionMonitorTerm,
-    ShadowingRotationMonitorTerm,
-)
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
+from instinctlab.sensors import HierarchicalContactSensorCfg
 
 
 @configclass
@@ -72,7 +66,7 @@ class BeyondMimicSceneCfg(InteractiveSceneCfg):
         prim_path="/World/skyLight",
         spawn=sim_utils.DomeLightCfg(color=(0.13, 0.13, 0.13), intensity=1000.0),
     )
-    contact_forces = ContactSensorCfg(
+    contact_forces = HierarchicalContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, force_threshold=10.0
     )
 
@@ -493,7 +487,7 @@ class BeyondMimicMonitorCfg:
     """BeyondMimic monitor configuration."""
 
     dataset = MonitorTermCfg(
-        func=MotionReferenceMonitorTerm,
+        func="instinctlab.monitors.monitors:MotionReferenceMonitorTerm",
         params=dict(
             asset_cfg=SceneEntityCfg("motion_reference"),
             sample_stat_interval=500,
@@ -501,7 +495,7 @@ class BeyondMimicMonitorCfg:
         ),
     )
     shadowing_position = MonitorTermCfg(
-        func=ShadowingPositionMonitorTerm,
+        func="instinctlab.monitors.monitors:ShadowingPositionMonitorTerm",
         params=dict(
             robot_cfg=SceneEntityCfg("robot"),
             motion_reference_cfg=SceneEntityCfg("motion_reference"),
@@ -510,7 +504,7 @@ class BeyondMimicMonitorCfg:
         ),
     )
     shadowing_rotation = MonitorTermCfg(
-        func=ShadowingRotationMonitorTerm,
+        func="instinctlab.monitors.monitors:ShadowingRotationMonitorTerm",
         params=dict(
             robot_cfg=SceneEntityCfg("robot"),
             motion_reference_cfg=SceneEntityCfg("motion_reference"),
@@ -518,7 +512,7 @@ class BeyondMimicMonitorCfg:
         ),
     )
     shadowing_joint_pos = MonitorTermCfg(
-        func=ShadowingJointPosMonitorTerm,
+        func="instinctlab.monitors.monitors:ShadowingJointPosMonitorTerm",
         params=dict(
             robot_cfg=SceneEntityCfg("robot"),
             motion_reference_cfg=SceneEntityCfg("motion_reference"),
@@ -526,7 +520,7 @@ class BeyondMimicMonitorCfg:
         ),
     )
     shadowing_joint_vel = MonitorTermCfg(
-        func=ShadowingJointVelMonitorTerm,
+        func="instinctlab.monitors.monitors:ShadowingJointVelMonitorTerm",
         params=dict(
             robot_cfg=SceneEntityCfg("robot"),
             motion_reference_cfg=SceneEntityCfg("motion_reference"),
@@ -534,7 +528,7 @@ class BeyondMimicMonitorCfg:
         ),
     )
     shadowing_link_pos = MonitorTermCfg(
-        func=ShadowingLinkPosMonitorTerm,
+        func="instinctlab.monitors.monitors:ShadowingLinkPosMonitorTerm",
         params=dict(
             robot_cfg=SceneEntityCfg("robot"),
             motion_reference_cfg=SceneEntityCfg("motion_reference"),
@@ -566,6 +560,6 @@ class BeyondMimicEnvCfg(InstinctLabRLEnvCfg):
         self.sim.dt = 1.0 / 50.0 / self.decimation
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        self.sim.physics = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
 
         self.run_name = "BeyondMimic"

@@ -4,7 +4,7 @@ import os
 import isaaclab.envs.mdp as mdp
 from isaaclab.envs import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.shadowing.mdp as shadowing_mdp
@@ -15,17 +15,19 @@ from instinctlab.assets.unitree_g1 import (
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     beyondmimic_g1_29dof_delayed_actuators,
+    configure_g1_29dof_policy_io,
 )
-from instinctlab.monitors import ActuatorMonitorTerm, MonitorTermCfg, ShadowingBasePosMonitorTerm
+from instinctlab.monitors import MonitorTermCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.amass_motion_cfg import AmassMotionCfg as AmassMotionCfgBase
 from instinctlab.motion_reference.motion_files.terrain_motion_cfg import TerrainMotionCfg as TerrainMotionCfgBase
 from instinctlab.motion_reference.utils import motion_interpolate_bilinear
 from instinctlab.sensors import get_link_prim_targets
+from instinctlab.utils.urdf import urdf_importer_link_prim_path
 
 G1_CFG = G1_29DOF_TORSOBASE_POPSICLE_CFG
 
-MOTION_FOLDER = "{AbsolutePathOfYourDataDirectory}"
+MOTION_FOLDER = "~/Datasets/NoKov-Marslab-Motions-instinctnpz/20251116_50cm_kneeClimbStep6"
 
 
 @configclass
@@ -59,9 +61,9 @@ class AMASSMotionCfg(AmassMotionCfgBase):
 
 
 motion_reference_cfg = MotionReferenceManagerCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    robot_model_path=G1_CFG.spawn.asset_path,
-    reference_prim_path="/World/envs/env_.*/RobotReference/torso_link",
+    prim_path="{ENV_REGEX_NS}/Robot",
+    robot_model_path=G1_CFG.spawn.source_urdf_path,
+    reference_prim_path="/World/envs/env_.*/RobotReference",
     link_of_interests=[
         "pelvis",
         "torso_link",
@@ -107,8 +109,11 @@ class G1PerceptiveShadowingEnvCfg(perceptual_cfg.PerceptiveShadowingEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        configure_g1_29dof_policy_io(self)
 
-        self.scene.camera.mesh_prim_paths.extend(get_link_prim_targets(G1_29DOF_LINKS))
+        self.scene.height_scanner.prim_path = urdf_importer_link_prim_path(G1_CFG.spawn.source_urdf_path, "torso_link")
+        self.scene.camera.prim_path = urdf_importer_link_prim_path(G1_CFG.spawn.source_urdf_path, "torso_link")
+        self.scene.camera.mesh_prim_paths.extend(get_link_prim_targets(G1_29DOF_LINKS, G1_CFG.spawn.source_urdf_path))
 
         self.scene.robot.actuators = beyondmimic_g1_29dof_actuators
         # self.scene.robot.spawn.rigid_props.max_depenetration_velocity = 0.3
@@ -159,8 +164,8 @@ class G1PerceptiveShadowingEnvCfg_PLAY(G1PerceptiveShadowingEnvCfg):
     )
 
     viewer: ViewerCfg = ViewerCfg(
-        eye=[1.5, 0.0, 1.5],
-        lookat=[0.0, 0.0, 0.0],
+        eye=(1.5, 0.0, 1.5),
+        lookat=(0.0, 0.0, 0.0),
         origin_type="asset_root",
         asset_name="robot",
     )
@@ -213,7 +218,6 @@ class G1PerceptiveShadowingEnvCfg_PLAY(G1PerceptiveShadowingEnvCfg):
         # put the reference in scene and move the robot elsewhere and visualize the reference
         # self.events.reset_robot.params["position_offset"] = [0.0, 1.0, 2.0]
         # self.scene.motion_reference.visualizing_robot_offset = (0.0, 0.0, 0.0)
-        # self.viewer.asset_name = "robot_reference"
 
         # remove some randomizations
         self.events.add_joint_default_pos = None
@@ -236,32 +240,32 @@ class G1PerceptiveShadowingEnvCfg_PLAY(G1PerceptiveShadowingEnvCfg):
 
         # add some additional monitor terms
         self.monitors.shadowing_position_stats = MonitorTermCfg(
-            func=ShadowingBasePosMonitorTerm,
+            func="instinctlab.monitors.monitors:ShadowingBasePosMonitorTerm",
             params=dict(
                 robot_cfg=SceneEntityCfg("robot"),
                 motion_reference_cfg=SceneEntityCfg("motion_reference"),
             ),
         )
         self.monitors.right_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_ankle_pitch.*"),
             ),
         )
         self.monitors.left_ankle_pitch_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_ankle_pitch.*"),
             ),
         )
         self.monitors.right_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="right_knee.*"),
             ),
         )
         self.monitors.left_knee_actuator = MonitorTermCfg(
-            func=ActuatorMonitorTerm,
+            func="instinctlab.monitors.monitors:ActuatorMonitorTerm",
             params=dict(
                 asset_cfg=SceneEntityCfg("robot", joint_names="left_knee.*"),
             ),

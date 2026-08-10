@@ -2,6 +2,8 @@ import math
 import os
 from dataclasses import MISSING
 
+from isaaclab_physx.physics import PhysxCfg
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
@@ -13,12 +15,12 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.sensors import RayCasterCfg, patterns
 from isaaclab.sensors.ray_caster.patterns import PinholeCameraPatternCfg
 from isaaclab.terrains import FlatPatchSamplingCfg, TerrainGeneratorCfg
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.utils.configclass import configclass
+from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 import instinctlab.envs.mdp as instinct_mdp
 import instinctlab.tasks.parkour.mdp as mdp
@@ -26,7 +28,12 @@ import instinctlab.terrains as terrain_gen
 from instinctlab.assets.unitree_g1 import beyondmimic_action_scale
 from instinctlab.managers import MultiRewardCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
-from instinctlab.sensors import Grid3dPointsGeneratorCfg, NoisyGroupedRayCasterCameraCfg, VolumePointsCfg
+from instinctlab.sensors import (
+    Grid3dPointsGeneratorCfg,
+    HierarchicalContactSensorCfg,
+    NoisyGroupedRayCasterCameraCfg,
+    VolumePointsCfg,
+)
 from instinctlab.terrains import GreedyconcatEdgeCylinderCfg, TerrainImporterCfg
 from instinctlab.utils.noise import (
     CropAndResizeCfg,
@@ -333,9 +340,12 @@ class SceneCfg(InteractiveSceneCfg):
         mesh_prim_paths=["/World/ground"],
         update_period=0.02,
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    contact_forces = HierarchicalContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
     leg_volume_points = VolumePointsCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*_ankle_roll_link",
+        prim_path="{ENV_REGEX_NS}/Robot",
+        body_names_expr=".*_ankle_roll_link",
         points_generator=Grid3dPointsGeneratorCfg(
             x_min=-0.025,
             x_max=0.12,
@@ -374,10 +384,10 @@ class SceneCfg(InteractiveSceneCfg):
                 0.4378029937970051,
             ),
             rot=(
-                0.9135367613482678,
                 0.004363309284746571,
                 0.4067366430758002,
                 0.0,
+                0.9135367613482678,
             ),
             convention="world",
         ),
@@ -920,8 +930,10 @@ class ParkourEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        self.sim.physx.gpu_collision_stack_size = 2**29
+        self.sim.physics = PhysxCfg(
+            gpu_max_rigid_patch_count=10 * 2**15,
+            gpu_collision_stack_size=2**29,
+        )
         # update sensor update periods
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt

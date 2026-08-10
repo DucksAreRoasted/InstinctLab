@@ -1,7 +1,5 @@
-from .actions import *
-from .commands import *
-from .curriculums import *
-from .events import *
-from .observations import *
-from .rewards import *
-from .terminations import *
+"""InstinctLab manager-based environment terms."""
+
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

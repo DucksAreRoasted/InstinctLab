@@ -4,7 +4,7 @@ import torch
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,7 +19,7 @@ from .terrain_motion import TerrainMotion
 class TerrainMotionCfg(AmassMotionCfg):
     """Configuration for terrain motion data, which is typically terrain-dependent."""
 
-    class_type: type = TerrainMotion
+    class_type: type | str = "{DIR}.terrain_motion:TerrainMotion"
 
     metadata_yaml: str = MISSING
     """YAML file containing the motion matching configuration.

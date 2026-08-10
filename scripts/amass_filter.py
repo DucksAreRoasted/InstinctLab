@@ -9,7 +9,7 @@ import yaml
 from isaaclab.app import AppLauncher
 
 # launch omniverse app
-app_launcher = AppLauncher(dict(headless=True))
+app_launcher = AppLauncher(visualizer="none")
 simulation_app = app_launcher.app
 
 import pytorch_kinematics as pk
@@ -84,7 +84,8 @@ def determine_motion_validity(filepath, args) -> tuple[str, bool]:
                 motion["joint_names"] if isinstance(motion["joint_names"], list) else motion["joint_names"].tolist()
             )
             root_pos = torch.from_numpy(motion["base_pos_w"]).to(torch.float32)
-            root_quat = torch.from_numpy(motion["base_quat_w"]).to(torch.float32)
+            root_quat_wxyz = torch.from_numpy(motion["base_quat_w"]).to(torch.float32)
+            root_quat = math_utils.convert_quat(root_quat_wxyz, to="xyzw")
             robot_joint_pos = torch.from_numpy(motion["joint_pos"]).to(torch.float32)
             traj_length_s = root_pos.shape[0] / framerate
             # re-order joint positions to match the order in robot chain

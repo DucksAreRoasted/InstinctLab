@@ -12,7 +12,7 @@ task_entry = "instinctlab.tasks.parkour.config.g1"
 
 gym.register(
     id="Instinct-Parkour-Target-Amp-G1-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.g1_parkour_target_amp_cfg:G1ParkourEnvCfg",
@@ -23,7 +23,7 @@ gym.register(
 
 gym.register(
     id="Instinct-Parkour-Target-Amp-G1-Play-v0",
-    entry_point="instinctlab.envs:InstinctRlEnv",
+    entry_point="instinctlab.envs.manager_based_rl_env:InstinctRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{task_entry}.g1_parkour_target_amp_cfg:G1ParkourEnvCfg_PLAY",

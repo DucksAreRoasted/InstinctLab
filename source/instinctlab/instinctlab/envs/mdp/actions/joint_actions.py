@@ -4,8 +4,6 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import omni.log
-
 import isaaclab.utils.string as string_utils
 from isaaclab.envs.mdp import JointPositionAction
 

@@ -26,7 +26,7 @@ for x in $X_VALS; do
             --num_envs "$NUM_ENVS" \
             --x_offset "$x" \
             --y_offset "$y" \
-            --headless
+            --viz none
 
         # 检查上一步是否成功
         if [ $? -ne 0 ]; then

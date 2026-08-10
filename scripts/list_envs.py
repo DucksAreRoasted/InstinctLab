@@ -10,7 +10,7 @@ It prints the name of the environment, the entry point and the config file.
 from isaaclab.app import AppLauncher
 
 # launch omniverse app
-app_launcher = AppLauncher(headless=True)
+app_launcher = AppLauncher(visualizer="none")
 simulation_app = app_launcher.app
 
 

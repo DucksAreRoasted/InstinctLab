@@ -4,8 +4,6 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import omni.physics.tensors.impl.api as physx
-
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
 from isaaclab.managers import CommandTerm
@@ -57,6 +55,18 @@ class ShadowingCommandBase(CommandTerm):
 
         # self.robot: Articulation = env.scene[cfg.asset_name]
         self._motion_reference: MotionReferenceManager = env.scene[cfg.motion_reference.name]
+        cfg.asset_cfg.resolve(env.scene)
+        robot = env.scene[cfg.asset_cfg.name]
+        self._asset_joint_ids = cfg.asset_cfg.joint_ids
+        if cfg.asset_cfg.joint_names is None:
+            self._motion_reference_joint_ids = slice(None)
+        else:
+            resolved_joint_names = [robot.joint_names[index] for index in self._asset_joint_ids]
+            self._motion_reference_joint_ids, reference_joint_names = self._motion_reference.find_joints(
+                resolved_joint_names, preserve_order=True
+            )
+            if resolved_joint_names != reference_joint_names:
+                raise ValueError("Robot and motion-reference joint selections do not match.")
         self._command: torch.Tensor = None  # override in the child class # type: ignore
         self._mask: torch.Tensor = None  # override in the child class # type: ignore
 
@@ -243,8 +253,8 @@ class PoseRefCommand(ShadowingCommandBase):
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
         if self.cfg.anchor_frame == "robot":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
-                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids],
-                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids],
             )
         elif self.cfg.anchor_frame == "reference":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
@@ -287,7 +297,7 @@ class PoseRefCommand(ShadowingCommandBase):
 
         if self.cfg.current_state_command:
             if self.cfg.rotation_mode == "quaternion":
-                self._current_state[env_ids, :, 3] = 1.0
+                self._current_state[env_ids, :, 6] = 1.0
             elif self.cfg.rotation_mode in ["axis_angle", "euler"]:
                 pass
             elif self.cfg.rotation_mode == "tannorm":
@@ -304,8 +314,8 @@ class PoseRefCommand(ShadowingCommandBase):
         )
 
     def _compute_debug_vis_data(self):
-        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w
-        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch
+        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
 
         # Since this command is defined in robot's local frame, we need to transform
         # the command data to the world frame. Even if it is not refreshed timely.
@@ -405,8 +415,8 @@ class PositionRefCommand(ShadowingCommandBase):
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
         if self.cfg.anchor_frame == "robot":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
-                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids],
-                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids],
             )
         elif self.cfg.anchor_frame == "reference":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
@@ -415,13 +425,13 @@ class PositionRefCommand(ShadowingCommandBase):
             )
         elif self.cfg.anchor_frame == "ref_rot_robot_pos":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
-                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids],
                 self._motion_reference.data.base_quat_w[env_ids, 0],
             )
         elif self.cfg.anchor_frame == "ref_pos_robot_rot":
             anchor_pos_w_inv, anchor_quat_w_inv = math_utils.subtract_frame_transforms(
                 self._motion_reference.data.base_pos_w[env_ids, 0],
-                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids],
             )
         self._command[env_ids] = (
             math_utils.transform_points(
@@ -437,8 +447,8 @@ class PositionRefCommand(ShadowingCommandBase):
         )
 
     def _debug_vis_callback(self, event):
-        robot_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w
-        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        robot_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch
+        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
         _vis_point_w: torch.tensor = math_utils.transform_points(
             self._command,  # (num_envs, num_frames, 3)
             robot_pos_w,
@@ -508,8 +518,8 @@ class RotationRefCommand(ShadowingCommandBase):
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
         _, robot_quat_w_inv = math_utils.subtract_frame_transforms(
-            self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids],
-            self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids],
+            self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids],
+            self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids],
         )
 
         if self.cfg.in_base_frame:
@@ -539,7 +549,7 @@ class RotationRefCommand(ShadowingCommandBase):
 
         if self.cfg.current_state_command and self.cfg.in_base_frame:
             if self.cfg.rotation_mode == "quaternion":
-                self._current_state[env_ids, :, 0] = 1.0
+                self._current_state[env_ids, :, 3] = 1.0
             elif self.cfg.rotation_mode in ["axis_angle", "euler"]:
                 pass
             elif self.cfg.rotation_mode == "tannorm":
@@ -547,7 +557,7 @@ class RotationRefCommand(ShadowingCommandBase):
                 self._current_state[env_ids, :, 0] = 1
                 self._current_state[env_ids, :, 5] = 1
         if self.cfg.current_state_command and not self.cfg.in_base_frame:
-            robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids]
+            robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids]
             if self.cfg.rotation_mode == "quaternion":
                 self._current_state[env_ids, :, :] = robot_quat_w.unsqueeze(1)
             elif self.cfg.rotation_mode in "axis_angle":
@@ -561,12 +571,12 @@ class RotationRefCommand(ShadowingCommandBase):
         if not hasattr(self, "_vis_quat_reference_w"):
             return
         self._visualizer.visualize(
-            translations=self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w,
+            translations=self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch,
             orientations=self._vis_quat_reference_w,
         )
 
     def _compute_debug_vis_data(self):
-        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
 
         # Since this command is defined in robot's local frame, we need to transform
         # the command data to the world frame. Even if it is not refreshed timely.
@@ -612,6 +622,8 @@ class ProjectedGravityRefCommand(ShadowingCommandBase):
         """
         # initialize the base class
         super().__init__(cfg, env)
+        import omni.physics.tensors.api as physx
+
         physics_sim_view = physx.create_simulation_view("torch")
         physics_sim_view.set_subspace_roots("/")
         gravity = physics_sim_view.get_gravity()
@@ -672,7 +684,7 @@ class ProjectedGravityRefCommand(ShadowingCommandBase):
         self._command[env_ids] *= self._mask[env_ids]
         if self.cfg.current_state_command:
             self._current_state[env_ids] = (
-                self._env.scene[self.cfg.asset_cfg.name].data.projected_gravity_b[env_ids].unsqueeze(1)
+                self._env.scene[self.cfg.asset_cfg.name].data.projected_gravity_b.torch[env_ids].unsqueeze(1)
             )
         if hasattr(self, "_visualizer"):
             _quat_ref = self._motion_reference.data.base_quat_w[
@@ -694,9 +706,9 @@ class ProjectedGravityRefCommand(ShadowingCommandBase):
     def _debug_vis_callback(self, event):
         if not hasattr(self, "_roll_ref") or not hasattr(self, "_pitch_ref"):
             return
-        marker_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.clone()
+        marker_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch.clone()
         marker_pos_w[:, 2] += 1.2  # raise the position for visualization
-        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
         robot_heading_w = math_utils.euler_xyz_from_quat(robot_quat_w)[2]  # (num_envs,)
         marker_orientations = math_utils.quat_from_euler_xyz(
             self._roll_ref,  # roll
@@ -764,7 +776,7 @@ class HeadingRefCommand(ShadowingCommandBase):
         return mask
 
     def _update_metrics(self):
-        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
         robot_heading_w = math_utils.euler_xyz_from_quat(robot_quat_w)[2]  # (num_envs,)
         aiming_frame_idx = self._motion_reference.aiming_frame_idx
         ALL_INDICES = self._motion_reference.ALL_INDICES
@@ -787,9 +799,9 @@ class HeadingRefCommand(ShadowingCommandBase):
         if self.cfg.current_state_command:
             self._current_state[env_ids] = (
                 math_utils.wrap_to_pi(
-                    math_utils.euler_xyz_from_quat(self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids])[
-                        2
-                    ]
+                    math_utils.euler_xyz_from_quat(
+                        self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids]
+                    )[2]
                 )
                 .unsqueeze(-1)
                 .unsqueeze(-1)
@@ -798,7 +810,7 @@ class HeadingRefCommand(ShadowingCommandBase):
     def _debug_vis_callback(self, event):
         if not hasattr(self, "_vis_heading_ref"):
             return
-        base_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.clone()
+        base_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch.clone()
         base_pos_w[:, 2] += 0.8
         scales = torch.ones_like(base_pos_w)  # scale for visualization
         scales[:, 0] = 4.0  # set the scale for the heading arrow
@@ -859,7 +871,7 @@ class HeadingErrorRefCommand(ShadowingCommandBase):
         self._update_command()
 
     def _update_metrics(self):
-        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
         robot_heading_w = math_utils.euler_xyz_from_quat(robot_quat_w)[2]  # (num_envs,)
         aiming_frame_idx = self._motion_reference.aiming_frame_idx
         ALL_INDICES = self._motion_reference.ALL_INDICES
@@ -878,7 +890,7 @@ class HeadingErrorRefCommand(ShadowingCommandBase):
             math_utils.euler_xyz_from_quat(base_quat_w.reshape(-1, 4))[2]
         ).reshape(-1, self._motion_reference.num_frames, 1)
         # get the robot's current heading
-        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids]
+        robot_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids]
         robot_heading_w = math_utils.euler_xyz_from_quat(robot_quat_w)[2]  # (num_envs,)
         # compute the heading error
         self._command[env_ids] = math_utils.wrap_to_pi(
@@ -892,7 +904,7 @@ class HeadingErrorRefCommand(ShadowingCommandBase):
     def _debug_vis_callback(self, event):
         if not hasattr(self, "_vis_heading_ref"):
             return
-        base_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.clone()
+        base_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch.clone()
         base_pos_w[:, 2] += 0.8
         scales = torch.ones_like(base_pos_w)  # scale for visualization
         scales[:, 0] = 4.0  # set the scale for the heading arrow
@@ -975,7 +987,7 @@ class BaseHeightRefCommand(ShadowingCommandBase):
         )
         if self.cfg.current_state_command:
             self._current_state[env_ids] = (
-                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids, 2:3].unsqueeze(1)
+                self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids, 2:3].unsqueeze(1)
             )
 
     def _debug_vis_callback(self, event):
@@ -988,7 +1000,7 @@ class BaseHeightRefCommand(ShadowingCommandBase):
     def _compute_debug_vis_data(self):
         aiming_frame_idx = self._motion_reference.aiming_frame_idx
         ALL_INDICES = self._motion_reference.ALL_INDICES
-        marker_translation = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.clone()
+        marker_translation = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch.clone()
         marker_translation[:, 2] = self._command[ALL_INDICES, aiming_frame_idx, 0]
         self._vis_marker_pos_w = marker_translation
 
@@ -1040,7 +1052,7 @@ class BaseLinVelRefCommand(ShadowingCommandBase):
         self._command[env_ids] *= self._mask[env_ids]
         if self.cfg.current_state_command:
             self._current_state[env_ids] = (
-                self._env.scene[self.cfg.asset_cfg.name].data.root_lin_vel_b[env_ids].unsqueeze(1)
+                self._env.scene[self.cfg.asset_cfg.name].data.root_lin_vel_b.torch[env_ids].unsqueeze(1)
             )
 
 
@@ -1059,19 +1071,22 @@ class JointPosRefCommand(ShadowingCommandBase):
         # initialize the base class
         super().__init__(cfg, env)
         # generate the command tensor buffer
-        data_dims = (self._motion_reference.data.joint_pos.shape[2],)
+        reference_joint_pos = self._motion_reference.data.joint_pos[..., self._motion_reference_joint_ids]
+        data_dims = (reference_joint_pos.shape[2],)
         self._command = torch.ones(
             (self.num_envs, self._motion_reference.num_frames, *data_dims),
             device=self.device,
         )
         self._mask = torch.ones(
-            (self.num_envs, self._motion_reference.num_frames, self._motion_reference.data.joint_pos.shape[2]),
+            (self.num_envs, self._motion_reference.num_frames, reference_joint_pos.shape[2]),
             device=self.device,
             dtype=torch.bool,
         )  # (num_envs, num_frames, num_joints)
         # get and copy the default joint position
         # shape (num_envs, num_joints)
-        self._default_joint_pos = self._env.scene[cfg.asset_cfg.name].data.default_joint_pos.clone()
+        self._default_joint_pos = (
+            self._env.scene[cfg.asset_cfg.name].data.default_joint_pos.torch[:, self._asset_joint_ids].clone()
+        )
         # generate state buffer in case we need additional frame as a pseudo command frame
         if self.cfg.current_state_command:
             self._current_state = torch.zeros(
@@ -1079,7 +1094,7 @@ class JointPosRefCommand(ShadowingCommandBase):
                 device=self.device,
             )
             self._current_state_mask = torch.ones(
-                (self.num_envs, 1, self._motion_reference.data.joint_pos.shape[2]),
+                (self.num_envs, 1, reference_joint_pos.shape[2]),
                 device=self.device,
                 dtype=torch.bool,
             )  # (num_envs, 1, num_joints)
@@ -1091,22 +1106,27 @@ class JointPosRefCommand(ShadowingCommandBase):
             self._mask,
             self._motion_reference.data.validity.unsqueeze(-1),
         )
-        mask = torch.logical_and(mask, self._motion_reference.data.joint_pos_mask)
+        mask = torch.logical_and(
+            mask,
+            self._motion_reference.data.joint_pos_mask[..., self._motion_reference_joint_ids],
+        )
         if self.cfg.current_state_command:
             return torch.cat([mask, self._current_state_mask], dim=1)
         return mask
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
-        self._command[env_ids, :] = self._motion_reference.data.joint_pos[env_ids] - self._default_joint_pos[
-            env_ids
-        ].unsqueeze(1)
-        self._command[env_ids, :] *= self._motion_reference.data.joint_pos_mask[env_ids]
+        self._command[env_ids, :] = self._motion_reference.data.joint_pos[env_ids][
+            :, :, self._motion_reference_joint_ids
+        ] - self._default_joint_pos[env_ids].unsqueeze(1)
+        self._command[env_ids, :] *= self._motion_reference.data.joint_pos_mask[env_ids][
+            :, :, self._motion_reference_joint_ids
+        ]
         self._command[env_ids, :] *= self._motion_reference.data.validity[env_ids].unsqueeze(-1)
         self._command[env_ids, :] *= self._mask[env_ids]
         if self.cfg.current_state_command:
-            self._current_state[env_ids] = self._env.scene[self.cfg.asset_cfg.name].data.joint_pos[env_ids].unsqueeze(
-                1
-            ) - self._default_joint_pos[env_ids].unsqueeze(1)
+            self._current_state[env_ids] = self._env.scene[self.cfg.asset_cfg.name].data.joint_pos.torch[env_ids][
+                :, self._asset_joint_ids
+            ].unsqueeze(1) - self._default_joint_pos[env_ids].unsqueeze(1)
 
 
 class JointPosErrRefCommand(ShadowingCommandBase):
@@ -1124,13 +1144,14 @@ class JointPosErrRefCommand(ShadowingCommandBase):
         # initialize the base class
         super().__init__(cfg, env)
         # generate the command tensor buffer
-        data_dims = (self._motion_reference.data.joint_pos.shape[2],)
+        reference_joint_pos = self._motion_reference.data.joint_pos[..., self._motion_reference_joint_ids]
+        data_dims = (reference_joint_pos.shape[2],)
         self._command = torch.ones(
             (self.num_envs, self._motion_reference.num_frames, *data_dims),
             device=self.device,
         )
         self._mask = torch.ones(
-            (self.num_envs, self._motion_reference.num_frames, self._motion_reference.data.joint_pos.shape[2]),
+            (self.num_envs, self._motion_reference.num_frames, reference_joint_pos.shape[2]),
             device=self.device,
             dtype=torch.bool,
         )  # (num_envs, num_frames, num_joints)
@@ -1141,7 +1162,7 @@ class JointPosErrRefCommand(ShadowingCommandBase):
                 device=self.device,
             )
             self._current_state_mask = torch.ones(
-                (self.num_envs, 1, self._motion_reference.data.joint_pos.shape[2]),
+                (self.num_envs, 1, reference_joint_pos.shape[2]),
                 device=self.device,
                 dtype=torch.bool,
             )
@@ -1153,17 +1174,22 @@ class JointPosErrRefCommand(ShadowingCommandBase):
             self._mask,
             self._motion_reference.data.validity.unsqueeze(-1),
         )
-        mask = torch.logical_and(mask, self._motion_reference.data.joint_pos_mask)
+        mask = torch.logical_and(
+            mask,
+            self._motion_reference.data.joint_pos_mask[..., self._motion_reference_joint_ids],
+        )
         if self.cfg.current_state_command:
             return torch.cat([mask, self._current_state_mask], dim=1)
         return mask
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
-        self._command[env_ids, :] = self._motion_reference.data.joint_pos[env_ids] - self._env.scene[
-            self.cfg.asset_cfg.name
-        ].data.joint_pos[env_ids].unsqueeze(1)
+        self._command[env_ids, :] = self._motion_reference.data.joint_pos[env_ids][
+            :, :, self._motion_reference_joint_ids
+        ] - self._env.scene[self.cfg.asset_cfg.name].data.joint_pos.torch[env_ids][:, self._asset_joint_ids].unsqueeze(
+            1
+        )
         self._command[env_ids] *= (
-            self._motion_reference.data.joint_pos_mask[env_ids]
+            self._motion_reference.data.joint_pos_mask[env_ids][:, :, self._motion_reference_joint_ids]
             * self._motion_reference.data.validity[env_ids].unsqueeze(-1)
             * self._mask[env_ids]
         )
@@ -1184,19 +1210,22 @@ class JointVelRefCommand(ShadowingCommandBase):
         # initialize the base class
         super().__init__(cfg, env)
         # generate the command tensor buffer
-        data_dims = (self._motion_reference.data.joint_vel.shape[2],)
+        reference_joint_vel = self._motion_reference.data.joint_vel[..., self._motion_reference_joint_ids]
+        data_dims = (reference_joint_vel.shape[2],)
         self._command = torch.ones(
             (self.num_envs, self._motion_reference.num_frames, *data_dims),
             device=self.device,
         )
         self._mask = torch.ones(
-            (self.num_envs, self._motion_reference.num_frames, self._motion_reference.data.joint_vel.shape[2]),
+            (self.num_envs, self._motion_reference.num_frames, reference_joint_vel.shape[2]),
             device=self.device,
             dtype=torch.bool,
         )  # (num_envs, num_frames, num_joints)
         # get and copy the default joint velocity
         # shape (num_envs, num_joints)
-        self._default_joint_vel = self._env.scene[cfg.asset_cfg.name].data.default_joint_vel.clone()
+        self._default_joint_vel = (
+            self._env.scene[cfg.asset_cfg.name].data.default_joint_vel.torch[:, self._asset_joint_ids].clone()
+        )
         # generate state buffer in case we need additional frame as a pseudo command frame
         if self.cfg.current_state_command:
             self._current_state = torch.zeros(
@@ -1204,7 +1233,7 @@ class JointVelRefCommand(ShadowingCommandBase):
                 device=self.device,
             )
             self._current_state_mask = torch.ones(
-                (self.num_envs, 1, self._motion_reference.data.joint_vel.shape[2]),
+                (self.num_envs, 1, reference_joint_vel.shape[2]),
                 device=self.device,
                 dtype=torch.bool,
             )  # (num_envs, 1, num_joints)
@@ -1216,24 +1245,27 @@ class JointVelRefCommand(ShadowingCommandBase):
             self._mask,
             self._motion_reference.data.validity.unsqueeze(-1),
         )
-        mask = torch.logical_and(mask, self._motion_reference.data.joint_vel_mask)
+        mask = torch.logical_and(
+            mask,
+            self._motion_reference.data.joint_vel_mask[..., self._motion_reference_joint_ids],
+        )
         if self.cfg.current_state_command:
             return torch.cat([mask, self._current_state_mask], dim=1)
         return mask
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
-        self._command[env_ids, :] = self._motion_reference.data.joint_vel[env_ids] - self._default_joint_vel[
-            env_ids
-        ].unsqueeze(1)
+        self._command[env_ids, :] = self._motion_reference.data.joint_vel[env_ids][
+            :, :, self._motion_reference_joint_ids
+        ] - self._default_joint_vel[env_ids].unsqueeze(1)
         self._command[env_ids, :] *= (
-            self._motion_reference.data.joint_vel_mask[env_ids]
+            self._motion_reference.data.joint_vel_mask[env_ids][:, :, self._motion_reference_joint_ids]
             * self._motion_reference.data.validity[env_ids].unsqueeze(-1)
             * self._mask[env_ids]
         )
         if self.cfg.current_state_command:
-            self._current_state[env_ids] = self._env.scene[self.cfg.asset_cfg.name].data.joint_vel[env_ids].unsqueeze(
-                1
-            ) - self._default_joint_vel[env_ids].unsqueeze(1)
+            self._current_state[env_ids] = self._env.scene[self.cfg.asset_cfg.name].data.joint_vel.torch[env_ids][
+                :, self._asset_joint_ids
+            ].unsqueeze(1) - self._default_joint_vel[env_ids].unsqueeze(1)
 
 
 class LinkRefCommand(ShadowingCommandBase):
@@ -1342,17 +1374,19 @@ class LinkRefCommand(ShadowingCommandBase):
         self._command[env_ids] *= self._motion_reference.data.validity[env_ids].unsqueeze(-1).unsqueeze(-1)
 
         if self.cfg.current_state_command:
-            root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w
-            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+            root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch
+            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
             root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(
                 root_pos_w[env_ids], root_quat_w[env_ids]
             )
             self._current_state[env_ids, :, :, :3] = math_utils.transform_points(
-                self._env.scene[self.cfg.asset_cfg.name].data.body_link_pos_w[env_ids][:, self._body_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.body_link_pos_w.torch[env_ids][:, self._body_ids],
                 root_pos_w_inv,
                 root_quat_w_inv,
             ).unsqueeze(1)
-            current_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_link_quat_w[env_ids][:, self._body_ids]
+            current_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_link_quat_w.torch[env_ids][
+                :, self._body_ids
+            ]
             current_quat_b = math_utils.quat_mul(
                 root_quat_w_inv.unsqueeze(1).expand(-1, self._motion_reference.num_link_to_ref, -1),
                 current_quat_w,
@@ -1381,8 +1415,8 @@ class LinkRefCommand(ShadowingCommandBase):
         )
 
     def _compute_debug_vis_data(self):
-        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w
-        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch
+        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
 
         # Since this command is defined in robot's local frame, we need to transform
         # the command data to the world frame. Even if it is not refreshed timely.
@@ -1485,11 +1519,11 @@ class LinkPosRefCommand(ShadowingCommandBase):
         )
 
         if self.cfg.current_state_command:
-            root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids]
-            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids]
+            root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids]
+            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids]
             root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w)
             self._current_state[env_ids] = math_utils.transform_points(
-                self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w[env_ids][:, self._body_ids],
+                self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w.torch[env_ids][:, self._body_ids],
                 root_pos_w_inv,
                 root_quat_w_inv,
             ).unsqueeze(1)
@@ -1502,8 +1536,8 @@ class LinkPosRefCommand(ShadowingCommandBase):
         )
 
     def _compute_debug_vis_data(self):
-        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w
-        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
+        root_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch
+        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
 
         # Since this command is defined in robot's local frame, we need to transform
         # the command data to the world frame. Even if it is not refreshed timely.
@@ -1590,11 +1624,11 @@ class LinkRotRefCommand(ShadowingCommandBase):
         self._command[env_ids] *= self._mask[env_ids].unsqueeze(-1)
 
         if self.cfg.current_state_command:
-            current_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_quat_w[env_ids]
+            current_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_quat_w.torch[env_ids]
             current_quat_w = current_quat_w[:, self._body_ids]
             current_quat_b = math_utils.quat_mul(
                 self._env.scene[self.cfg.asset_cfg.name]
-                .data.root_quat_w[env_ids]
+                .data.root_quat_w.torch[env_ids]
                 .unsqueeze(1)
                 .expand(-1, self._motion_reference.num_link_to_ref, -1),
                 current_quat_w,
@@ -1618,10 +1652,10 @@ class LinkPosErrRefCommand(LinkPosRefCommand):
         super().__init__(cfg, env)
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
-        link_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w[:, self._body_ids]
+        link_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w.torch[:, self._body_ids]
         root_pos_w_inv, root_quat_w_inv = math_utils.subtract_frame_transforms(
-            self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w[env_ids],
-            self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids],
+            self._env.scene[self.cfg.asset_cfg.name].data.root_pos_w.torch[env_ids],
+            self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids],
         )
         link_pos_b = math_utils.transform_points(
             link_pos_w[env_ids],
@@ -1644,8 +1678,8 @@ class LinkPosErrRefCommand(LinkPosRefCommand):
         )
 
     def _compute_debug_vis_data(self):
-        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w
-        link_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w[:, self._body_ids]
+        root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch
+        link_pos_w = self._env.scene[self.cfg.asset_cfg.name].data.body_pos_w.torch[:, self._body_ids]
 
         # get the error direction in world frame
         aiming_frame_idx = self._motion_reference.aiming_frame_idx
@@ -1705,11 +1739,11 @@ class LinkRotErrRefCommand(LinkRotRefCommand):
         super().__init__(cfg, env)
 
     def _update_command_by_env_ids(self, env_ids: Sequence[int] | torch.Tensor):
-        link_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_quat_w[env_ids]
+        link_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.body_quat_w.torch[env_ids]
         link_quat_w = link_quat_w[:, self._body_ids]  # (n_envs, n_links, 4)
         if self.cfg.in_base_frame:
             # transform the link quaternion to the base frame
-            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w[env_ids]
+            root_quat_w = self._env.scene[self.cfg.asset_cfg.name].data.root_quat_w.torch[env_ids]
             link_quat_ref_ = self._motion_reference.data.link_quat_b[env_ids]
             link_quat_ = math_utils.quat_mul(
                 math_utils.quat_inv(root_quat_w.unsqueeze(1).expand(-1, self._motion_reference.num_link_to_ref, -1)),

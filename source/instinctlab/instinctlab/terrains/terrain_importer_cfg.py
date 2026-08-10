@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from isaaclab.terrains import TerrainImporterCfg as TerrainImporterCfgBase
-from isaaclab.utils import configclass
-
-from .terrain_importer import TerrainImporter
+from isaaclab.utils.configclass import configclass
 
 if TYPE_CHECKING:
     from .virtual_obstacle import VirtualObstacleCfg
@@ -13,7 +11,7 @@ if TYPE_CHECKING:
 
 @configclass
 class TerrainImporterCfg(TerrainImporterCfgBase):
-    class_type: type = TerrainImporter
+    class_type: type | str = "{DIR}.terrain_importer:TerrainImporter"
     """The inherited class to use for the terrain importer."""
 
     virtual_obstacles: dict[str, VirtualObstacleCfg] = {}

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 if TYPE_CHECKING:
     import torch
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from .amass_motion_cfg import AmassMotionCfg
 from .omomo_motion import OmomoMotion
@@ -16,7 +16,7 @@ from .omomo_motion import OmomoMotion
 class OmomoMotionCfg(AmassMotionCfg):
     """Configuration for the OMOMO formatted motion data"""
 
-    class_type: type = OmomoMotion
+    class_type: type | str = "{DIR}.omomo_motion:OmomoMotion"
 
     supported_file_endings: Sequence[str] = ["retargeted.npz", "retargetted.npz"]
     """ At initialization stage, OmomoMotion will walk through `cfg.path` and collect all files ending with

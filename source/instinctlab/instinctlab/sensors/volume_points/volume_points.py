@@ -5,8 +5,8 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-import omni.physics.tensors.impl.api as physx
-from isaacsim.core.simulation_manager import SimulationManager
+import warp as wp
+from pxr import UsdPhysics
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
@@ -17,6 +17,8 @@ from isaaclab.sensors.sensor_base import SensorBase
 from .volume_points_data import VolumePointsData
 
 if TYPE_CHECKING:
+    import omni.physics.tensors.api as physx
+
     from isaaclab.markers import VisualizationMarkersCfg
 
     from .volume_points_cfg import VolumePointsCfg
@@ -74,11 +76,6 @@ class VolumePoints(SensorBase):
         """
         self._virtual_obstacles.update(virtual_obstacles)
 
-    def reset(self, env_ids: Sequence[int] | None = None):
-        # reset the timers and counters
-        super().reset(env_ids)
-        ...
-
     def find_bodies(self, name_keys: str | Sequence[str], preserve_order: bool = False) -> tuple[list[int], list[str]]:
         """Find bodies in the articulation based on the name keys.
 
@@ -97,39 +94,50 @@ class VolumePoints(SensorBase):
 
     def _initialize_impl(self):
         super()._initialize_impl()
-        # create simulation view
-        self._physics_sim_view = SimulationManager.get_physics_sim_view()
-        # check that only rigid bodies are selected
-        leaf_pattern = self.cfg.prim_path.rsplit("/", 1)[-1]
-        template_prim_path = self._parent_prims[0].GetPath().pathString
-        body_names = list()
-        leaf_regex = re.compile(f"^{leaf_pattern}$")
-        for prim in sim_utils.get_all_matching_child_prims(
-            template_prim_path,
-            predicate=lambda p: leaf_regex.match(p.GetName()) is not None,
-            depth=1,
-        ):
-            body_names.append(prim.GetName())
-        if not body_names:
-            raise RuntimeError(f"Sensor at path '{self.cfg.prim_path}' could not find any bodies.")
+        from isaaclab_physx.physics import PhysxManager
 
-        # construct regex expression for the body names
-        body_names_regex = r"(" + "|".join(body_names) + r")"
-        body_names_regex = f"{self.cfg.prim_path.rsplit('/', 1)[0]}/{body_names_regex}"
-        # convert regex expressions to glob expressions for PhysX
-        body_names_glob = body_names_regex.replace(".*", "*")
+        # create simulation view
+        self._physics_sim_view = PhysxManager.get_physics_sim_view()
+        if self._physics_sim_view is None:
+            raise RuntimeError("PhysX simulation view is not initialized.")
+
+        # Resolve the authored articulation once, then select rigid links recursively.
+        root_matches = sim_utils.resolve_matching_prims_from_source(self.cfg.prim_path)
+        if not root_matches:
+            raise RuntimeError(f"Sensor root at path '{self.cfg.prim_path}' could not be resolved.")
+        template_root, destination_root_expr = root_matches[0]
+        name_exprs = self.cfg.body_names_expr
+        if isinstance(name_exprs, str):
+            name_exprs = [name_exprs]
+        name_patterns = [re.compile(f"^{expr}$") for expr in name_exprs]
+        body_prims = sim_utils.get_all_matching_child_prims(
+            template_root.GetPath(),
+            predicate=lambda prim: prim.HasAPI(UsdPhysics.RigidBodyAPI)
+            and any(pattern.match(prim.GetName()) is not None for pattern in name_patterns),
+            traverse_instance_prims=False,
+        )
+        if not body_prims:
+            raise RuntimeError(
+                f"Sensor at path '{self.cfg.prim_path}' could not find rigid bodies matching {name_exprs}."
+            )
+
+        template_root_path = template_root.GetPath().pathString
+        body_paths_glob = [
+            (destination_root_expr + prim.GetPath().pathString[len(template_root_path) :]).replace(".*", "*")
+            for prim in body_prims
+        ]
 
         # create a rigid prim view for the sensor
-        self._body_physx_view = self._physics_sim_view.create_rigid_body_view(body_names_glob)
+        self._body_physx_view = self._physics_sim_view.create_rigid_body_view(body_paths_glob)
 
         # resolve the true count of bodies
         self._num_bodies = self.body_physx_view.count // self._num_envs
         # check that volume points sensor succeeded
-        if self._num_bodies != len(body_names):
+        if self._num_bodies != len(body_prims):
             raise RuntimeError(
                 "Failed to initialize volume points sensor for specified bodies."
                 f"\n\tInput prim path    : {self.cfg.prim_path}"
-                f"\n\tResolved prim paths: {body_names_regex}"
+                f"\n\tResolved prim paths: {body_paths_glob}"
             )
 
         # initialize the volume points data
@@ -146,11 +154,9 @@ class VolumePoints(SensorBase):
         # initialize handlers to access virtual obstacles
         self._virtual_obstacles: dict = dict()
 
-    def _update_buffers_impl(self, env_ids: Sequence[int]):
+    def _update_buffers_impl(self, env_mask: wp.array):
         """Fills the buffers of the sensor data."""
-        # default to all sensors
-        if len(env_ids) == self._num_envs:
-            env_ids = slice(None)
+        env_ids = wp.to_torch(env_mask).nonzero(as_tuple=False).squeeze(-1)
 
         # update the volume points data
         self._refresh_volume_points(env_ids)
@@ -160,11 +166,10 @@ class VolumePoints(SensorBase):
     def _refresh_volume_points(self, env_ids: Sequence[int] | None = None) -> None:
         """Refresh the volume points data. If env_ids is None, refresh all environments."""
 
-        body_poses = self.body_physx_view.get_transforms().view(-1, self.num_bodies, 7)[env_ids]  # (N_, B, 7)
-        body_vels = self.body_physx_view.get_velocities().view(-1, self.num_bodies, 6)[env_ids]  # (N_, B, 6)
+        body_poses = wp.to_torch(self.body_physx_view.get_transforms()).view(-1, self.num_bodies, 7)[env_ids]
+        body_vels = wp.to_torch(self.body_physx_view.get_velocities()).view(-1, self.num_bodies, 6)[env_ids]
         self._data.pos_w[env_ids] = body_poses[..., :3]  # (N_, B, 3)
-        # convert quaternion from xyz to wxyz format
-        self._data.quat_w[env_ids] = math_utils.convert_quat(body_poses[..., 3:], to="wxyz")  # (N_, B, 4)
+        self._data.quat_w[env_ids] = body_poses[..., 3:]  # (N_, B, 4), XYZW
         self._data.vel_w[env_ids] = body_vels[..., :3]  # (N_, B, 3)
         self._data.ang_vel_w[env_ids] = body_vels[..., 3:]  # (N_, B, 3)
 

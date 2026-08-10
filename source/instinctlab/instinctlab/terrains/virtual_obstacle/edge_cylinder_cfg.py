@@ -7,15 +7,8 @@ from typing import TYPE_CHECKING, Literal
 import isaaclab.sim as sim_utils
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.sensors import patterns
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from .edge_cylinder import (
-    FeatureEdgeCylinder,
-    GreedyconcatEdgeCylinder,
-    PluckerEdgeCylinder,
-    RansacEdgeCylinder,
-    RayEdgeCylinder,
-)
 from .virtual_obstacle_base import VirtualObstacleCfg
 
 
@@ -51,7 +44,7 @@ class EdgeCylinderCfg(VirtualObstacleCfg):
 class PluckerEdgeCylinderCfg(EdgeCylinderCfg):
     """Configuration for the plucker edge cylinder generator."""
 
-    class_type: type = PluckerEdgeCylinder
+    class_type: type | str = "{DIR}.edge_cylinder:PluckerEdgeCylinder"
     """The class to use for the sharp edge detector."""
 
 
@@ -59,7 +52,7 @@ class PluckerEdgeCylinderCfg(EdgeCylinderCfg):
 class RansacEdgeCylinderCfg(EdgeCylinderCfg):
     """The class to use for the ransac edge cylinder generator."""
 
-    class_type: type = RansacEdgeCylinder
+    class_type: type | str = "{DIR}.edge_cylinder:RansacEdgeCylinder"
 
     max_iter: int = 500
     """The maximum number of iterations."""
@@ -78,7 +71,7 @@ class RansacEdgeCylinderCfg(EdgeCylinderCfg):
 class GreedyconcatEdgeCylinderCfg(EdgeCylinderCfg):
     """The class to use for the greedy-concat edge cylinder generator."""
 
-    class_type: type = GreedyconcatEdgeCylinder
+    class_type: type | str = "{DIR}.edge_cylinder:GreedyconcatEdgeCylinder"
 
     adjacent_angle_threshold: float = 30.0
     """The angle threshold to consider two edges as adjacent."""
@@ -94,7 +87,7 @@ class GreedyconcatEdgeCylinderCfg(EdgeCylinderCfg):
 class RayEdgeCylinderCfg(VirtualObstacleCfg):
     """The class to use for the ray-based edge cylinder generator."""
 
-    class_type: type = RayEdgeCylinder
+    class_type: type | str = "{DIR}.edge_cylinder:RayEdgeCylinder"
 
     cylinder_radius: float = 0.2
     """The radius of the edge cylinder, which is used to treat the edge cylinders as a virtual obstacle."""
@@ -172,7 +165,7 @@ class RayEdgeCylinderCfg(VirtualObstacleCfg):
 class FeatureEdgeCylinderCfg(EdgeCylinderCfg):
     """The class to use for the feature-extracted edge cylinder generator."""
 
-    class_type: type = FeatureEdgeCylinder
+    class_type: type | str = "{DIR}.edge_cylinder:FeatureEdgeCylinder"
 
     cylinder_radius: float = 0.2
     """The radius of the edge cylinder, which is used to treat the edge cylinders as a virtual obstacle."""
