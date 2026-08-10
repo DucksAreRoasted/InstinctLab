@@ -1,6 +1,21 @@
+import numpy as np
 import torch
 
 import isaaclab.utils.math as math_utils
+
+
+def matrix_from_quat_xyzw(quat: np.ndarray) -> np.ndarray:
+    """Return a rotation matrix from an ``(x, y, z, w)`` quaternion."""
+    x, y, z, w = quat
+    two_s = 2.0 / np.dot(quat, quat)
+    return np.array(
+        [
+            [1.0 - two_s * (y * y + z * z), two_s * (x * y - z * w), two_s * (x * z + y * w)],
+            [two_s * (x * y + z * w), 1.0 - two_s * (x * x + z * z), two_s * (y * z - x * w)],
+            [two_s * (x * z - y * w), two_s * (y * z + x * w), 1.0 - two_s * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
 
 
 @torch.jit.script

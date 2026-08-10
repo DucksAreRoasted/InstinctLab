@@ -18,6 +18,7 @@ from isaaclab.sim.simulation_context import SimulationContext
 from isaaclab.utils.mesh import PRIMITIVE_MESH_TYPES, create_trimesh_from_geom_mesh, create_trimesh_from_geom_shape
 from isaaclab.utils.warp import convert_to_warp_mesh
 
+from instinctlab.utils.math import matrix_from_quat_xyzw
 from instinctlab.utils.warp.kernels import (
     copy_flat_mesh_transforms_kernel,
     raycast_flat_mesh_groups_min_distance_kernel,
@@ -30,20 +31,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-def _matrix_from_quat_xyzw(quat: np.ndarray) -> np.ndarray:
-    """Return a rotation matrix from an ``(x, y, z, w)`` quaternion."""
-    x, y, z, w = quat
-    two_s = 2.0 / np.dot(quat, quat)
-    return np.array(
-        [
-            [1.0 - two_s * (y * y + z * z), two_s * (x * y - z * w), two_s * (x * z + y * w)],
-            [two_s * (x * y + z * w), 1.0 - two_s * (x * x + z * z), two_s * (y * z - x * w)],
-            [two_s * (x * z - y * w), two_s * (y * z + x * w), 1.0 - two_s * (x * x + y * y)],
-        ],
-        dtype=np.float64,
-    )
 
 
 class UrdfLinkMeshMixin:
@@ -397,7 +384,7 @@ class UrdfLinkMeshMixin:
             mesh.apply_scale(sim_utils.resolve_prim_scale(mesh_prim))
             relative_pos, relative_quat = sim_utils.resolve_prim_pose(mesh_prim, reference_prim)
             transform = np.eye(4)
-            transform[:3, :3] = _matrix_from_quat_xyzw(np.asarray(relative_quat, dtype=np.float64))
+            transform[:3, :3] = matrix_from_quat_xyzw(np.asarray(relative_quat, dtype=np.float64))
             transform[:3, 3] = np.asarray(relative_pos, dtype=np.float64)
             mesh.apply_transform(transform)
             trimesh_meshes.append(mesh)
