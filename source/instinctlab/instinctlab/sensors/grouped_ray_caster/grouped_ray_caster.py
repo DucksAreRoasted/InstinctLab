@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class UrdfLinkMeshMixin:
-    """Build flat grouped mesh records, including URDF importer 3 link geometry."""
+class FlatTargetPrimRegistryMixin:
+    """Build flat target-prim records and fixed world membership for grouped ray casting."""
 
     def _build_mesh_records(self, target_cfg, plan, dummy_mesh_id):
         """Keep an articulation-root link as one tracked mesh target.
@@ -372,7 +372,7 @@ class UrdfLinkMeshMixin:
             queue.extend(prim.GetFilteredChildren(Usd.TraverseInstanceProxies()))
 
         if not mesh_prims:
-            raise RuntimeError(f"No visual mesh prims found for URDF link: {target_prim.GetPath()}")
+            raise RuntimeError(f"No visual mesh prims found for imported link prim: {target_prim.GetPath()}")
 
         trimesh_meshes = []
         for mesh_prim in mesh_prims:
@@ -395,13 +395,14 @@ class UrdfLinkMeshMixin:
             trimesh_mesh = trimesh.util.concatenate(trimesh_meshes)
         else:
             raise RuntimeError(
-                f"Multiple visual meshes found for URDF link '{target_prim.GetPath()}', but merging is disabled."
+                f"Multiple visual meshes found for imported link prim '{target_prim.GetPath()}', but merging is"
+                " disabled."
             )
 
         wp_mesh = convert_to_warp_mesh(trimesh_mesh.vertices, trimesh_mesh.faces, device=self._device)
         BaseMultiMeshRayCaster.meshes[prim_key] = wp_mesh
         logger.info(
-            "Read %d visual mesh prims for URDF link '%s' with %d vertices and %d faces.",
+            "Read %d visual meshes for imported link prim '%s' with %d vertices and %d faces.",
             len(mesh_prims),
             target_prim.GetPath(),
             len(trimesh_mesh.vertices),
@@ -410,7 +411,7 @@ class UrdfLinkMeshMixin:
         return wp_mesh.id
 
 
-class GroupedRayCaster(UrdfLinkMeshMixin, MultiMeshRayCaster):
+class GroupedRayCaster(FlatTargetPrimRegistryMixin, MultiMeshRayCaster):
     """PhysX ray caster over flat mesh entities grouped by fixed world IDs."""
 
     cfg: GroupedRayCasterCfg

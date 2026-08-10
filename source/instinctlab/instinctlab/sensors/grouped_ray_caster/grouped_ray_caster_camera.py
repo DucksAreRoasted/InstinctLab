@@ -9,13 +9,13 @@ from isaaclab.sensors.ray_caster import kernels as ray_caster_kernels
 
 from instinctlab.utils.warp.kernels import raycast_flat_mesh_groups_min_distance_kernel
 
-from .grouped_ray_caster import UrdfLinkMeshMixin
+from .grouped_ray_caster import FlatTargetPrimRegistryMixin
 
 if TYPE_CHECKING:
     from .grouped_ray_caster_camera_cfg import GroupedRayCasterCameraCfg
 
 
-class GroupedRayCasterCamera(UrdfLinkMeshMixin, MultiMeshRayCasterCamera):
+class GroupedRayCasterCamera(FlatTargetPrimRegistryMixin, MultiMeshRayCasterCamera):
     """PhysX multi-mesh ray-caster camera with an ignored near-hit interval."""
 
     cfg: GroupedRayCasterCameraCfg
