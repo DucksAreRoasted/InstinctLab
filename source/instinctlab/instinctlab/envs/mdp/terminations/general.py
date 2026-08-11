@@ -31,9 +31,9 @@ def dataset_exhausted(
         check_all_frames: If True, an environment is marked exhausted when *any* frame in its
             reference data is invalid/out of bounds. If False (default), only the current
             aiming frame is checked.
-        obs_term_to_reset: Observation terms with history that should be reset when the dataset is
-            exhausted without notifying the environment. Typically this is only provided when
-            ``reset_without_notice`` is true. Each entry must use the
+        obs_term_to_reset: Observation terms whose callable state and history should be reset when
+            the dataset is exhausted without notifying the environment. Typically this is only
+            provided when ``reset_without_notice`` is true. Each entry must use the
             ``"{observation_group_name}:{observation_term_name}"`` format.
     Returns:
         True if the dataset is exhausted, False otherwise.
@@ -53,6 +53,10 @@ def dataset_exhausted(
         env_ids = return_.nonzero(as_tuple=True)[0]
         for term_entry in obs_term_to_reset:
             group_name, term_name = term_entry.split(":")
+            term_index = env.observation_manager._group_obs_term_names[group_name].index(term_name)
+            term_cfg = env.observation_manager._group_obs_term_cfgs[group_name][term_index]
+            if isinstance(term_cfg.func, ManagerTermBase):
+                term_cfg.func.reset(env_ids=env_ids)
             env.observation_manager._group_obs_term_history_buffer[group_name][term_name].reset(batch_ids=env_ids)
     if reset_without_notice:
         motion_reference.reset(env_ids=return_.nonzero(as_tuple=True)[0])
