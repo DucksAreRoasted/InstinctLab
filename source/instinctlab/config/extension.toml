@@ -18,6 +18,7 @@ keywords = ["extension", "template", "isaaclab"]
 "isaaclab" = {}
 "isaaclab_assets" = {}
 "isaaclab_mimic" = {}
+"isaaclab_physx" = {}
 "isaaclab_rl" = {}
 "isaaclab_tasks" = {}
 # NOTE: Add additional dependencies here

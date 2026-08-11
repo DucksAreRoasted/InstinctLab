@@ -16,6 +16,7 @@ from datetime import datetime
 
 from instinct_rl.runners import OnPolicyRunner
 
+import isaaclab
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.io import dump_yaml
@@ -174,6 +175,7 @@ def main(
         env = InstinctRlVecEnvWrapper(env)
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
         runner.add_git_repo_to_log(__file__)
+        runner.add_git_repo_to_log(isaaclab.__file__)
         if resume_path is not None:
             print(f"[INFO]: Loading model checkpoint from: {resume_path}")
             runner.load(resume_path)

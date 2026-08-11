@@ -33,12 +33,32 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
 
 ## Installation
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) and check out `release/3.0.0-beta2`. The pinned revision for this migration is `6a7acb0320a0bdc15b13e44e83b575e00797faf4`, with Isaac Sim 6.0.1 and Python 3.12.
+### Pinned runtime dependencies
+
+Use these source revisions and dependency constraints for the InstinctLab Isaac Lab 3.0 migration:
+
+| Dependency | Version or revision |
+|---|---|
+| Python | `>=3.12,<3.13` |
+| Isaac Sim | `6.0.1.0` |
+| Isaac Lab | `release/3.0.0-beta2` at `6a7acb0320a0bdc15b13e44e83b575e00797faf4` (package `6.1.17`) |
+| Instinct-RL | `upgrade/isaaclab3.0.0-beta2` at `b1ee3f84983e10da385eafcd7da1f010e34f01ca` (package `1.0.2`) |
+| PyTorch | `2.10.0` |
+| TorchVision | `0.25.0` |
+| TorchAudio | `2.10.0` |
+| NumPy | `>=2` |
+| Warp | `1.13.0` |
+| Gymnasium | `1.2.1` |
+
+Use the full source SHAs rather than the floating branch heads when reproducing an experiment.
+
+- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html), then check out the Isaac Lab revision listed above.
 
 - Install Instinct-RL by following the [installation guide](https://github.com/project-instinct/instinct_rl/blob/main/README.md).
     TL; DR;
     ```bash
     git clone https://github.com/project-instinct/instinct_rl.git
+    git -C instinct_rl checkout b1ee3f84983e10da385eafcd7da1f010e34f01ca
     python -m pip install -e instinct_rl
     ```
 
