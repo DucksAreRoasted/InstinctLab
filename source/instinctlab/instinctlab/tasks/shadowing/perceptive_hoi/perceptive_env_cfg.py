@@ -52,8 +52,8 @@ class PerceptiveHoiShadowingSceneCfg(InteractiveSceneCfg):
     # robots
     robot: ArticulationCfg = MISSING
 
-    # robot reference articulation
-    robot_reference: ArticulationCfg = None
+    # full-robot reference visualization, unmanaged by the scene articulation lifecycle
+    robot_reference: AssetBaseCfg | None = None
 
     # motion reference
     motion_reference: MotionReferenceManagerCfg = MISSING  # type: ignore

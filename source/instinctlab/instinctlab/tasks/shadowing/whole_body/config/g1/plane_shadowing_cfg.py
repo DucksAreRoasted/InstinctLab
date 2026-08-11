@@ -27,6 +27,7 @@ from instinctlab.assets.unitree_g1 import (
     G1_29DOF_TORSOBASE_POPSICLE_CFG,
     G1_29Dof_TorsoBase_symmetric_augmentation_joint_mapping,
     G1_29Dof_TorsoBase_symmetric_augmentation_joint_reverse_buf,
+    G1_REFERENCE_CFG,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     configure_g1_29dof_policy_io,
@@ -371,7 +372,7 @@ class G1PlaneShadowingEnvCfg_PLAY(G1PlaneShadowingEnvCfg):
         num_envs=1,
         env_spacing=2.5,
         robot=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot"),
-        robot_reference=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
+        robot_reference=G1_REFERENCE_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
         motion_reference=motion_reference_cfg.replace(
             debug_vis=True,
             # motion_buffers={

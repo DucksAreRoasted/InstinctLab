@@ -6,8 +6,10 @@ import os
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg, ImplicitActuatorCfg
+from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sim.schemas import CollisionBaseCfg, JointDriveBaseCfg
 from isaaclab_assets import G1_CFG
 
 from instinctlab.sim import UrdfFileCfg, UsdFileCfg
@@ -603,6 +605,19 @@ G1_29DOF_TORSOBASE_POPSICLE_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.9,
     actuators=beyondmimic_g1_29dof_actuators,
+)
+
+_G1_REFERENCE_SPAWN_CFG = G1_29DOF_TORSOBASE_POPSICLE_CFG.spawn.copy()
+_G1_REFERENCE_SPAWN_CFG.activate_contact_sensors = False
+_G1_REFERENCE_SPAWN_CFG.rigid_props = _G1_REFERENCE_SPAWN_CFG.rigid_props.replace(disable_gravity=True)
+_G1_REFERENCE_SPAWN_CFG.collision_props = CollisionBaseCfg(collision_enabled=False)
+_G1_REFERENCE_SPAWN_CFG.joint_drive_props = JointDriveBaseCfg(stiffness=0.0, damping=0.0, max_force=0.0)
+G1_REFERENCE_CFG = AssetBaseCfg(
+    spawn=_G1_REFERENCE_SPAWN_CFG,
+    init_state=AssetBaseCfg.InitialStateCfg(
+        pos=G1_29DOF_TORSOBASE_POPSICLE_CFG.init_state.pos,
+        rot=G1_29DOF_TORSOBASE_POPSICLE_CFG.init_state.rot,
+    ),
 )
 
 G1_29DOF_LINKS = [  # Order not guaranteed.

@@ -16,6 +16,7 @@ import instinctlab.tasks.shadowing.perceptive_hoi.perceptive_env_cfg as perceptu
 from instinctlab.assets.unitree_g1 import (
     G1_29DOF_LINKS,
     G1_29DOF_TORSOBASE_POPSICLE_CFG,
+    G1_REFERENCE_CFG,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     beyondmimic_g1_29dof_delayed_actuators,
@@ -174,7 +175,7 @@ class G1PerceptiveHoiShadowingEnvCfg_PLAY(G1PerceptiveHoiShadowingEnvCfg):
         num_envs=1,
         env_spacing=2.5,
         robot=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot"),
-        robot_reference=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
+        robot_reference=G1_REFERENCE_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
         motion_reference=motion_reference_cfg.replace(debug_vis=True),
     )
 

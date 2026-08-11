@@ -14,6 +14,7 @@ import instinctlab.tasks.shadowing.beyondmimic.beyondmimic_env_cfg as beyondmimi
 ##
 from instinctlab.assets.unitree_g1 import (
     G1_29DOF_TORSOBASE_POPSICLE_CFG,
+    G1_REFERENCE_CFG,
     beyondmimic_action_scale,
     beyondmimic_g1_29dof_actuators,
     configure_g1_29dof_policy_io,
@@ -163,7 +164,7 @@ class G1BeyondMimicPlaneEnvCfg_PLAY(G1BeyondMimicPlaneEnvCfg):
         num_envs=1,
         env_spacing=2.5,
         robot=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot"),
-        robot_reference=G1_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
+        robot_reference=G1_REFERENCE_CFG.replace(prim_path="{ENV_REGEX_NS}/RobotReference"),
         motion_reference=motion_reference_cfg.replace(
             debug_vis=True,
         ),
