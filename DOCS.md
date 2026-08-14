@@ -1,14 +1,16 @@
-# Documentations and Core concepts
+# 文档与核心概念
 
-## Monitor
-A monitor is an environment component that the user can use to store the simulation status and plot them in tensorboard.
+## Monitor（监视器）
+
+Monitor 是一种环境组件，用户可以用它存储仿真状态，并将其绘制到 tensorboard 中。
 
 ---
 
-## Multi Reward Manager
-A multi reward manager is an environment component that substitute the default reward manager. It allows the user to define multiple rewards group for the use of advantage-mixing / multi-critic RL.
+## Multi Reward Manager（多奖励管理器）
 
-### Example Configuration
+多奖励管理器是一种替代默认 reward manager 的环境组件。它允许用户定义多个奖励组，用于 advantage-mixing / multi-critic RL。
+
+### 示例配置
 
 ```python
 from instinctlab.managers import MultiRewardCfg
@@ -76,18 +78,18 @@ class EnvCfg(InstinctLabRLEnvCfg):
     # ... other configs ...
 ```
 
-**Key Points:**
-- Each reward group is a config class containing `RewardTermCfg` instances
-- The `MultiRewardManager` computes rewards separately for each group
-- The `MultiRewardManager` is used only if the `rewards` config is a `MultiRewardCfg` instance.
-- Returns a dict with shape `(num_envs, num_groups)` for multi-critic RL
-- Supports `combine_method` per group: `"sum"` (default) or `"prod"` for term combination
+**要点：**
+- 每个奖励组都是一个包含 `RewardTermCfg` 实例的配置类
+- `MultiRewardManager` 会为每个组分别计算奖励
+- 仅当 `rewards` 配置是 `MultiRewardCfg` 实例时，才会使用 `MultiRewardManager`。
+- 返回一个形状为 `(num_envs, num_groups)` 的 dict，用于 multi-critic RL
+- 每个组支持 `combine_method`：`"sum"`（默认）或 `"prod"`，用于组合各项
 
 ---
 
-## Motion Reference
+## Motion Reference（运动参考）
 
-In general, the data-flow is designed to be as follows:
+总体而言，数据流设计如下：
 
 ```mermaid
 flowchart TD
@@ -101,50 +103,50 @@ flowchart TD
     Command -->|Shadowing Command/Mask| rShadowing["track_.\*_shadowing_cmd_.\*<br/>Rewards"]
 ```
 
-### Motion Reference Manager
-- A motion reference manager is a scene entity inherited from `Sensor`, which provides the motion reference data for the robot.
+### Motion Reference Manager（运动参考管理器）
+- 运动参考管理器是一个继承自 `Sensor` 的场景实体，为机器人提供运动参考数据。
 
-- It also manages multiple motion buffer, either from file or generated.
+- 它还管理多个 motion buffer（运动缓冲区），这些缓冲区可以来自文件，也可以生成。
 
-- It also provides functionality to spread the motion trajectories across different processes.
+- 它还提供将运动轨迹分布到不同进程的功能。
 
-### Motion Reference Data
-- A motion reference data is a data structure that stores the motion reference data, which is the expected future motion that the robot should reach.
+### Motion Reference Data（运动参考数据）
+- 运动参考数据是一种存储运动参考数据的数据结构，它表示机器人应当达到的预期未来运动。
 
-- The motion reference data contains a sequence of motion (frame). You may set the interval of each frame. If you set  `data_start_from` to `"current_time"`, the motion reference data serve as common general motion tracking setting.
+- 运动参考数据包含一个运动（frame）序列。你可以设置每一帧的间隔。如果将 `data_start_from` 设为 `"current_time"`，运动参考数据将作为通用的常规运动跟踪设置。
 
-### Motion Reference Frame
-- A motion reference frame is a single frame of the motion reference data. It contains the expected state of the robot at that each current time step.
+### Motion Reference Frame（运动参考帧）
+- 运动参考帧是运动参考数据中的单个帧。它包含机器人在每个当前时间步的预期状态。
 
-- To the reuse of data structure, the motion reference frame always has a time dimension with length 1.
+- 为了复用数据结构，运动参考帧始终具有长度为 1 的时间维度。
 
-### Motion Buffer
-- A motion buffer is the file handler to the motion data. The basic functional implementation is `motion_reference.motion_files.amass_motion:AmassMotion`.
+### Motion Buffer（运动缓冲区）
+- motion buffer 是运动数据的文件处理器。基本功能实现是 `motion_reference.motion_files.amass_motion:AmassMotion`。
 
-- Please read the source code of `motion_reference.motion_files.amass_motion:AmassMotion._load_motion_sequences` and `motion_reference.motion_files.amass_motion:AmassMotion._read_motion_file` for the supported file format.
+- 关于支持的文件格式，请阅读 `motion_reference.motion_files.amass_motion:AmassMotion._load_motion_sequences` 和 `motion_reference.motion_files.amass_motion:AmassMotion._read_motion_file` 的源码。
 
-- Retargeted motion files with name ends with `retargeted.npz` are recommended.
+- 推荐使用名称以 `retargeted.npz` 结尾的重定向（retargeted）运动文件。
 
-### Shadowing Command
-- A shadowing command is a command that the robot should follow. It is typically generated from the motion reference data.
+### Shadowing Command（影子指令）
+- shadowing command 是机器人应当遵循的指令。它通常由运动参考数据生成。
 
-- Each shadowing command MUST update as soon as the motion reference data is updated.
+- 每当运动参考数据更新时，每个 shadowing command 都必须（MUST）立即更新。
 
-### Imitation
-- Imitation and rewards with `.*_imitation_.*` means the robot should focus on the motion at the each time step no matter how the motion reference data is set.
+### Imitation（模仿）
+- Imitation 以及名称匹配 `.*_imitation_.*` 的奖励表示：无论运动参考数据如何设置，机器人都应在每个时间步关注该运动。
 
-### Tracking Motion Reference Data
-- By Tracking and rewards with `.*_tracking_.*`, it means the robot should focus on the motion only when the expected reaching time is reached. For example, if the expected reaching time is 1 second in the future, the robot should focus on the motion only after 1 second has passed.
+### Tracking Motion Reference Data（跟踪运动参考数据）
+- 对于 Tracking 以及名称匹配 `.*_tracking_.*` 的奖励，它表示机器人只应在达到预期到达时间时才关注该运动。例如，如果预期到达时间是未来的 1 秒，那么机器人只应在 1 秒过后才关注该运动。
 
-- NOTE: This is a legacy issue that in IsaacLab, rewards starting with `track` computes the error between the robot's current state and the command state.
+- 注意：这是一个历史遗留问题——在 IsaacLab 中，以 `track` 开头的奖励计算的是机器人当前状态与指令状态之间的误差。
 
-### Track Shadowing Command
-- Shadowing and rewards with `track_.*_shadowing_cmd_.*` means the robot should focus on meeting the shadowing command only. Even if the shadowing command may distort the motion reference data, the robot should follow the shadowing command.
+### Track Shadowing Command（跟踪影子指令）
+- Shadowing 以及名称匹配 `track_.*_shadowing_cmd_.*` 的奖励表示：机器人应只专注于满足 shadowing command。即使 shadowing command 可能扭曲运动参考数据，机器人也应遵循该 shadowing command。
 
 
-### Example Configurations
+### 示例配置
 
-#### Motion Reference Manager Configuration
+#### Motion Reference Manager 配置
 
 ```python
 from instinctlab.motion_reference import MotionReferenceManagerCfg
@@ -179,8 +181,8 @@ motion_reference_cfg = MotionReferenceManagerCfg(
 ```
 
 
-#### Termination terms to reset motion reference manager
-**NOTE: This termination term must be applied for each motion reference manager you use.**
+#### 用于重置 motion reference manager 的终止项
+**注意：你使用的每个 motion reference manager 都必须应用此终止项。**
 
 ```python
 from isaaclab.managers import TerminationTermCfg
@@ -198,7 +200,7 @@ class TerminationsCfg:
 ```
 
 
-#### Shadowing Command Configuration
+#### Shadowing Command 配置
 
 ```python
 from instinctlab.envs.mdp import PoseRefCommandCfg, JointPosRefCommandCfg
@@ -222,7 +224,7 @@ joint_pos_ref_command = JointPosRefCommandCfg(
 )
 ```
 
-#### Reward Configuration Examples
+#### 奖励配置示例
 
 ```python
 from instinctlab.envs.mdp import RewTermCfg
@@ -264,7 +266,7 @@ class RewardsCfg:
     )
 ```
 
-#### Matching with pre-defined terrain mesh configurations
+#### 与预定义地形网格配置进行匹配
 
 ```python
 from instinctlab.terrains import MotionMatchedTerrainCfg
@@ -282,13 +284,13 @@ class EventsCfg:
 ```
 ---
 
-## Virtual Obstacles (in Terrains)
+## Virtual Obstacles（虚拟障碍物，位于地形中）
 
-Virtual obstacles are geometric representations of terrain features (typically sharp edges) that are generated from terrain meshes and used for collision detection and penetration computation in sensors. They enable robots to perceive and avoid dangerous terrain features without requiring explicit collision geometry in the simulation.
+虚拟障碍物是地形特征（通常是锐利边缘）的几何表示，它们由地形网格生成，并用于传感器中的碰撞检测和穿透计算。它们使机器人能够感知并避开危险的地形特征，而无需在仿真中显式地设置碰撞几何体。
 
-### Class Hierarchy and Relationships
+### 类层次结构与关系
 
-The following diagram shows the class inheritance and composition relationships:
+下图展示了类继承与组合关系：
 
 ```mermaid
 classDiagram
@@ -414,58 +416,58 @@ classDiagram
     VolumePointsSensor --> VirtualObstacleBase : uses
 ```
 
-### Customized Terrain Importer
+### 自定义 Terrain Importer
 
-The `TerrainImporter` class extends IsaacLab's base terrain importer to add support for virtual obstacles. Key features include:
+`TerrainImporter` 类扩展了 IsaacLab 的基础 terrain importer，以增加对虚拟障碍物的支持。主要特性包括：
 
-- **Virtual Obstacle Management**: Accepts a dictionary of virtual obstacle configurations in its config (`virtual_obstacles`). Each virtual obstacle is instantiated during terrain importer initialization.
+- **虚拟障碍物管理**：在其配置（`virtual_obstacles`）中接受一个虚拟障碍物配置字典。每个虚拟障碍物在 terrain importer 初始化时被实例化。
 
-- **Automatic Generation**: When a terrain mesh is imported (via `import_mesh`), all configured virtual obstacles are automatically generated from the terrain mesh. The generation happens before the mesh is imported into the simulator, allowing virtual obstacles to potentially modify the mesh if needed.
+- **自动生成**：当导入地形网格时（通过 `import_mesh`），所有已配置的虚拟障碍物都会自动从地形网格生成。生成发生在网格导入模拟器之前，因此虚拟障碍物在需要时可以先修改网格。
 
-- **Access Interface**: Provides a `virtual_obstacles` property that returns a dictionary of all virtual obstacle instances, making them accessible to sensors and other components.
+- **访问接口**：提供一个 `virtual_obstacles` 属性，返回所有虚拟障碍物实例的字典，使传感器和其他组件可以访问它们。
 
-- **Visualization Support**: Integrates virtual obstacle visualization with the terrain importer's debug visualization system. When debug visualization is enabled, all virtual obstacles are visualized; when disabled, their visualizers are hidden.
+- **可视化支持**：将虚拟障碍物可视化与 terrain importer 的调试可视化系统集成。启用调试可视化时，所有虚拟障碍物都会被可视化；禁用时，其可视化器会被隐藏。
 
-- **Hacked Generator Support**: Supports a special `"hacked_generator"` terrain type that allows custom terrain generation workflows while maintaining compatibility with IsaacLab's terrain importer interface.
+- **Hacked Generator 支持**：支持一个特殊的 `"hacked_generator"` 地形类型，允许自定义地形生成工作流，同时保持与 IsaacLab 的 terrain importer 接口的兼容性。
 
-- **Subterrain Configuration Access**: Provides access to subterrain-specific configurations through the `subterrain_specific_cfgs` property, which delegates to the terrain generator if available.
+- **子地形配置访问**：通过 `subterrain_specific_cfgs` 属性提供对子地形特定配置的访问，该属性在可用时委托给 terrain generator。
 
-### Customized Terrain Generator
+### 自定义 Terrain Generator
 
-The `FiledTerrainGenerator` class extends IsaacLab's `TerrainGenerator` to provide enhanced access to subterrain-specific configurations:
+`FiledTerrainGenerator` 类扩展了 IsaacLab 的 `TerrainGenerator`，以增强对子地形特定配置的访问：
 
-- **Configuration Tracking**: Intercepts the terrain mesh generation process (`_get_terrain_mesh`) to record and store the specific configuration for each subterrain. This includes the original configuration plus any modifications made during generation (such as difficulty and seed values).
+- **配置跟踪**：拦截地形网格生成过程（`_get_terrain_mesh`），记录并存储每个子地形的具体配置。这包括原始配置以及生成期间所做的任何修改（例如 difficulty 和 seed 值）。
 
-- **Subterrain Access**: Provides two methods to access subterrain configurations:
-  - `subterrain_specific_cfgs`: Returns a list of all subterrain configurations, indexed by row and column (access pattern: `configs[row_id * num_cols + col_id]`).
-  - `get_subterrain_cfg(row_ids, col_ids)`: Retrieves configurations for specific subterrains by their row and column indices. Supports both single indices and tensor-based batch queries.
+- **子地形访问**：提供两种访问子地形配置的方法：
+  - `subterrain_specific_cfgs`：返回所有子地形配置的列表，按行和列索引（访问方式：`configs[row_id * num_cols + col_id]`）。
+  - `get_subterrain_cfg(row_ids, col_ids)`：通过行和列索引获取特定子地形的配置。既支持单个索引，也支持基于 tensor 的批量查询。
 
-- **Use Case**: This interface is particularly useful when you need to query or modify terrain properties based on the specific subterrain where a robot is located, enabling terrain-aware behaviors and curriculum learning.
+- **使用场景**：当你需要根据机器人所在的特定子地形来查询或修改地形属性时，此接口特别有用，可实现地形感知行为和课程学习（curriculum learning）。
 
-### Virtual Obstacle
+### Virtual Obstacle（虚拟障碍物）
 
-Virtual obstacles are abstract geometric representations that can be generated from terrain meshes. They provide collision detection and penetration computation capabilities for sensors.
+虚拟障碍物是可以从地形网格生成的抽象几何表示。它们为传感器提供碰撞检测和穿透计算能力。
 
-- **Base Interface**: The `VirtualObstacleBase` abstract class defines the core interface that all virtual obstacles must implement:
-  - `generate(mesh, device)`: Generates the virtual obstacle geometry from a terrain mesh.
-  - `visualize()`: Visualizes the virtual obstacle in the simulation (typically as markers).
-  - `disable_visualizer()`: Hides the visualization.
-  - `get_points_penetration_offset(points)`: Computes penetration offsets for given points, returning vectors pointing from the obstacle surface to the points (used by sensors for collision detection).
+- **基础接口**：`VirtualObstacleBase` 抽象类定义了所有虚拟障碍物必须实现的核心接口：
+  - `generate(mesh, device)`：从地形网格生成虚拟障碍物几何体。
+  - `visualize()`：在仿真中可视化虚拟障碍物（通常以标记（marker）形式）。
+  - `disable_visualizer()`：隐藏可视化。
+  - `get_points_penetration_offset(points)`：为给定点计算穿透偏移，返回从障碍物表面指向这些点的向量（供传感器用于碰撞检测）。
 
-- **Edge Detection Implementations**: Currently, virtual obstacles are primarily generated using edge detection algorithms. The system provides several edge detection variants:
-  - **EdgeCylinder**: Base class that detects sharp edges in meshes using face adjacency angles. Edges exceeding a configurable angle threshold are identified and represented as cylinders.
-  - **PluckerEdgeCylinder**: Uses Plücker coordinates to merge collinear edge segments, reducing redundancy in edge representation.
-  - **RansacEdgeCylinder**: Uses RANSAC algorithm with DBSCAN clustering to fit line segments to edge points, robust to noise.
-  - **GreedyconcatEdgeCylinder**: Uses a greedy concatenation algorithm to connect adjacent edges based on angle thresholds, creating longer continuous edge segments.
-  - **RayEdgeCylinder**: Uses ray casting from multiple camera viewpoints to detect edges in depth and normal images, then applies edge detection (Canny) and clustering to extract edge segments.
+- **边缘检测实现**：目前，虚拟障碍物主要使用边缘检测算法生成。系统提供了多种边缘检测变体：
+  - **EdgeCylinder**：基类，使用面相邻角检测网格中的锐利边缘。超过可配置角度阈值的边缘会被识别并以圆柱体表示。
+  - **PluckerEdgeCylinder**：使用 Plücker 坐标合并共线的边缘段，减少边缘表示中的冗余。
+  - **RansacEdgeCylinder**：使用 RANSAC 算法结合 DBSCAN 聚类，将线段拟合到边缘点，对噪声具有鲁棒性。
+  - **GreedyconcatEdgeCylinder**：使用贪心拼接算法，基于角度阈值连接相邻边缘，创建更长的连续边缘段。
+  - **RayEdgeCylinder**：从多个相机视角进行射线投射（ray casting），在深度图和法向图中检测边缘，然后应用边缘检测（Canny）和聚类来提取边缘段。
 
-- **Spatial Optimization**: Edge-based virtual obstacles use a `CylinderSpatialGrid` for efficient spatial partitioning, enabling fast penetration queries for large numbers of edge cylinders.
+- **空间优化**：基于边缘的虚拟障碍物使用 `CylinderSpatialGrid` 进行高效的空间划分，从而能够对大量边缘圆柱体进行快速穿透查询。
 
-- **Integration with Sensors**: Virtual obstacles are registered with sensors (e.g., `VolumePointsSensor`) through the `register_virtual_obstacles` method. Sensors use the `get_points_penetration_offset` method to compute penetration depths and offsets for their sampled points, enabling terrain-aware perception and collision avoidance.
+- **与传感器集成**：虚拟障碍物通过 `register_virtual_obstacles` 方法注册到传感器（例如 `VolumePointsSensor`）。传感器使用 `get_points_penetration_offset` 方法为其采样点计算穿透深度和偏移，从而实现地形感知与避障。
 
-### Example Configuration
+### 示例配置
 
-#### Terrain Importer with Virtual Obstacles
+#### 带虚拟障碍物的 Terrain Importer
 
 ```python
 from instinctlab.terrains import TerrainImporterCfg
@@ -532,7 +534,7 @@ terrain_cfg = TerrainImporterCfg(
 )
 ```
 
-#### Registering Virtual Obstacles with Sensors
+#### 向传感器注册虚拟障碍物
 
 ```python
 from instinctlab.envs.mdp import EventTerm
@@ -556,7 +558,7 @@ class EventsCfg:
     )
 ```
 
-#### Accessing Virtual Obstacles in Rewards
+#### 在奖励中访问虚拟障碍物
 
 ```python
 from instinctlab.envs.mdp import RewTermCfg
@@ -580,35 +582,35 @@ volume_points_step_safety = RewTermCfg(
 )
 ```
 
-- **Point Sampling**: Generates a pattern of points (typically using a 3D grid) in the local frame of each body. The points are defined relative to the body's origin and orientation.
+- **点采样**：在每个身体的局部坐标系中生成一个点模式（通常使用 3D 网格）。这些点相对于身体的原点和朝向定义。
 
-- **World Frame Tracking**: Transforms all sampled points to the world frame and tracks their positions (`points_pos_w`) and velocities (`points_vel_w`) as the bodies move and rotate.
+- **世界坐标系跟踪**：将所有采样点变换到世界坐标系，并随着身体的移动和旋转跟踪其位置（`points_pos_w`）和速度（`points_vel_w`）。
 
-- **Penetration Detection**: Integrates with virtual obstacles (registered via `register_virtual_obstacles`) to compute penetration offsets. For each point, it queries all registered virtual obstacles and returns the maximum penetration offset vector pointing from the obstacle surface toward the point.
+- **穿透检测**：与虚拟障碍物集成（通过 `register_virtual_obstacles` 注册）来计算穿透偏移。对于每个点，它查询所有已注册的虚拟障碍物，并返回从障碍物表面指向该点的最大穿透偏移向量。
 
-- **Body State Tracking**: Tracks the pose and velocity of each body (`pos_w`, `quat_w`, `vel_w`, `ang_vel_w`) that has volume points attached.
+- **身体状态跟踪**：跟踪每个附加了 volume points 的身体的姿态和速度（`pos_w`、`quat_w`、`vel_w`、`ang_vel_w`）。
 
-### Configuration
+### 配置
 
-- **Points Generator**: Configurable via `points_generator` (e.g., `Grid3dPointsGeneratorCfg`) to define the spatial pattern of sampled points. The default grid generator creates a 3D grid with configurable bounds and resolution along each axis.
+- **点生成器**：可通过 `points_generator`（例如 `Grid3dPointsGeneratorCfg`）配置，以定义采样点的空间模式。默认的网格生成器会创建一个沿各轴具有可配置边界和分辨率的 3D 网格。
 
-- **Body Selection**: Uses `prim_path` to specify which bodies to attach volume points to. Supports filtering via `filter_prim_paths_expr` for more precise body selection.
+- **身体选择**：使用 `prim_path` 指定将 volume points 附加到哪些身体。支持通过 `filter_prim_paths_expr` 进行过滤，以实现更精确的身体选择。
 
-- **Visualization**: Provides debug visualization with two marker types:
-  - Green spheres for normal volume points
-  - Red spheres for points that have penetrated virtual obstacles
+- **可视化**：提供带有两种标记类型的调试可视化：
+  - 绿色球体表示正常 volume points
+  - 红色球体表示已穿透虚拟障碍物的点
 
-### Integration with Virtual Obstacles
+### 与虚拟障碍物集成
 
-The sensor must be registered with virtual obstacles (typically during environment initialization) to enable penetration detection:
+传感器必须注册虚拟障碍物（通常是在环境初始化期间），才能启用穿透检测：
 
 ```python
 sensor.register_virtual_obstacles(terrain.virtual_obstacles)
 ```
 
-During each update cycle, the sensor queries all registered virtual obstacles to compute penetration offsets. If multiple obstacles overlap, it keeps the maximum penetration depth.
+在每个更新周期中，传感器查询所有已注册的虚拟障碍物以计算穿透偏移。如果有多个障碍物重叠，它保留最大穿透深度。
 
-***NOTE:*** Do call `register_virtual_obstacles` as a startup event in your environment EventsCfg.
+***注意：*** 务必（Do）在你的环境 EventsCfg 中将 `register_virtual_obstacles` 作为启动事件调用。
 ```python
     register_virtual_obstacles = EventTerm(
         func=instinct_mdp.register_virtual_obstacle_to_sensor,
@@ -619,64 +621,64 @@ During each update cycle, the sensor queries all registered virtual obstacles to
     )
 ```
 
-### Data Structure
+### 数据结构
 
-- Body states: `pos_w`, `quat_w`, `vel_w`, `ang_vel_w` (shape: `(N, B, ...)`)
-- Point states: `points_pos_w`, `points_vel_w` (shape: `(N, B, P, 3)`)
-- Penetration: `penetration_offset` (shape: `(N, B, P, 3)`)
+- 身体状态：`pos_w`、`quat_w`、`vel_w`、`ang_vel_w`（形状：`(N, B, ...)`）
+- 点状态：`points_pos_w`、`points_vel_w`（形状：`(N, B, P, 3)`）
+- 穿透：`penetration_offset`（形状：`(N, B, P, 3)`）
 
-Where `N` is the number of environments, `B` is the number of bodies per environment, and `P` is the number of points per body.
+其中 `N` 是环境数量，`B` 是每个环境的身体数量，`P` 是每个身体的点数。
 
-### Use Cases
+### 使用场景
 
-- **Collision Avoidance**: Detect when robot parts penetrate into dangerous terrain features (e.g., sharp edges detected as virtual obstacles).
+- **避障**：检测机器人部件何时穿透危险的地形特征（例如被检测为虚拟障碍物的锐利边缘）。
 
-- **Reward Shaping**: Used in reward functions (e.g., `volume_points_penetration`) to penalize penetration, often weighted by the velocity of penetrating points to encourage avoidance of fast-moving collisions.
+- **奖励塑形（Reward Shaping）**：在奖励函数中使用（例如 `volume_points_penetration`）来惩罚穿透，通常以穿透点的速度作为权重，以鼓励避免快速移动的碰撞。
 
 ---
 
-## Noisy Grouped Sensor Camera
+## Noisy Grouped Sensor Camera（带噪声的分组传感器相机）
 
-The Noisy Grouped Sensor Camera combines the Grouped RayCaster's dynamic mesh tracking capabilities with configurable noise pipelines and history buffers, making it suitable for sim-to-real transfer and robust perception training.
+Noisy Grouped Sensor Camera 将 Grouped RayCaster 的动态网格跟踪能力与可配置的噪声流水线和历史缓冲区相结合，使其适用于 sim-to-real 迁移和鲁棒的感知训练。
 
 ### Grouped RayCaster
 
-The `GroupedRayCaster` extends the base `RayCaster` to support ray casting against multiple meshes that can move and update their positions dynamically during simulation. This is essential for scenarios where the robot or other objects in the scene are moving.
+`GroupedRayCaster` 扩展了基础 `RayCaster`，以支持对多个网格进行射线投射，这些网格可以在仿真过程中移动并动态更新其位置。这对于机器人或场景中其他物体正在移动的情况至关重要。
 
-- **Dynamic Mesh Tracking**: Unlike the base RayCaster which uses static meshes, GroupedRayCaster tracks rigid body views for each mesh group and updates mesh transforms before each ray cast operation. This allows rays to correctly hit moving objects.
+- **动态网格跟踪**：与使用静态网格的基础 RayCaster 不同，GroupedRayCaster 跟踪每个网格组的刚体视图，并在每次射线投射操作前更新网格变换。这使得射线能够正确命中移动的物体。
 
-- **Collision Groups**: Each mesh and ray is assigned a collision group ID. Meshes with collision group `-1` are hit by all rays (global meshes like terrain). Meshes with collision group matching an environment ID are only hit by rays from that environment. This enables environment-specific ray casting in parallel simulations.
+- **碰撞组**：每个网格和射线都被分配一个碰撞组 ID。碰撞组为 `-1` 的网格会被所有射线命中（如地形这样的全局网格）。碰撞组与某个环境 ID 匹配的网格只会被来自该环境的射线命中。这实现了并行仿真中针对特定环境的射线投射。
 
-- **Multiple Mesh Sources**: Supports multiple `mesh_prim_paths` configurations, allowing rays to be cast against different sets of meshes (e.g., terrain, robot body parts, obstacles). Each mesh group can have its own rigid body view for transform updates.
+- **多个网格来源**：支持多个 `mesh_prim_paths` 配置，允许对不同的网格集合（例如地形、机器人身体部件、障碍物）进行射线投射。每个网格组都可以拥有自己的刚体视图，用于变换更新。
 
-- **Mesh Merging**: Can merge multiple meshes from Xform prims into a single warp mesh, useful for complex articulated structures. Supports auxiliary mesh linking via `aux_mesh_and_link_names` configuration.
+- **网格合并**：可以将来自 Xform prim 的多个网格合并为单个 warp mesh，这对于复杂的铰接结构很有用。支持通过 `aux_mesh_and_link_names` 配置进行辅助网格链接。
 
-- **Transform Updates**: Before each ray cast, updates the world transforms of all tracked meshes based on their associated rigid body views, ensuring accurate collision detection with moving objects.
+- **变换更新**：在每次射线投射前，根据所有被跟踪网格关联的刚体视图更新其世界变换，从而确保对移动物体的准确碰撞检测。
 
 ### Noisy Grouped RayCaster
 
-The `NoisyGroupedRayCasterCamera` extends `GroupedRayCasterCamera` with a configurable noise pipeline and history buffers:
+`NoisyGroupedRayCasterCamera` 扩展了 `GroupedRayCasterCamera`，增加了一条可配置的噪声流水线和历史缓冲区：
 
-- **Noise Pipeline**: Applies a sequence of noise transformations to sensor data (e.g., depth images). Common noise types include:
-  - **Depth Artifacts**: Simulates sensor artifacts and measurement errors
-  - **Depth Stereo Noise**: Adds stereo camera-like noise patterns
-  - **Depth Sky Artifacts**: Simulates sky detection artifacts
-  - **Latency Noise**: Introduces temporal delays by sampling from history buffers
-  - **Gaussian/Uniform Noise**: Basic additive or multiplicative noise
-  - **Normalization**: Normalizes depth values to a specified range
+- **噪声流水线**：对传感器数据（例如深度图像）应用一系列噪声变换。常见的噪声类型包括：
+  - **深度伪影（Depth Artifacts）**：模拟传感器伪影和测量误差
+  - **深度立体噪声（Depth Stereo Noise）**：添加类似立体相机的噪声模式
+  - **深度天空伪影（Depth Sky Artifacts）**：模拟天空检测伪影
+  - **延迟噪声（Latency Noise）**：通过从历史缓冲区采样引入时间延迟
+  - **高斯/均匀噪声（Gaussian/Uniform Noise）**：基本的加性或乘性噪声
+  - **归一化（Normalization）**：将深度值归一化到指定范围
 
-- **History Buffers**: Maintains temporal history of sensor outputs for each configured data type. Useful for:
-  - Latency simulation (using past frames)
-  - Temporal filtering
-  - Motion estimation
+- **历史缓冲区**：为每个已配置的数据类型维护传感器输出的时间历史。用途包括：
+  - 延迟仿真（使用过去的帧）
+  - 时间滤波
+  - 运动估计
 
-- **Dual Output**: Provides both clean (`data_type`) and noisy (`data_type_noised`) outputs, allowing comparison and training with different noise levels.
+- **双输出**：同时提供干净（`data_type`）和带噪声（`data_type_noised`）的输出，便于比较和在不同噪声水平下训练。
 
-- **Configurable Data Types**: Noise can be applied selectively to different sensor outputs (e.g., `distance_to_image_plane`, `normals`, etc.) based on configuration.
+- **可配置的数据类型**：根据配置，可以有选择地将噪声应用于不同的传感器输出（例如 `distance_to_image_plane`、`normals` 等）。
 
-- **Sim-to-Real Transfer**: The noise pipeline helps bridge the sim-to-real gap by simulating real-world sensor imperfections, making trained policies more robust to sensor noise in deployment.
+- **Sim-to-Real 迁移**：噪声流水线通过模拟真实世界的传感器缺陷，有助于弥合 sim-to-real 差距，使训练出的策略在部署时对传感器噪声更具鲁棒性。
 
-### Example Configuration
+### 示例配置
 
 ```python
 from instinctlab.sensors import GroupedRayCasterCfg, NoisedGroupedRayCasterCameraCfg

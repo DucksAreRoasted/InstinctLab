@@ -7,42 +7,44 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-## Overview
+## 概述
 
-This repository is the environment side of [Project-Instinct](https://project-instinct.github.io/).
+本仓库是 [Project-Instinct](https://project-instinct.github.io/) 的环境（environment）侧实现。
 
-We aim at industralize Reinforcement Learning for Humanoid (legged robots) whole-body control.
+我们的目标是将人形机器人（足式机器人）全身控制的强化学习（Reinforcement Learning）工业化。
 
-**Key Features:**
+**关键特性：**
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
-- `Unified Ecosystem` This repository is a part of the Project-Instinct ecosystem, which includes the [instinct_rl](https://github.com/project-instinct/instinct_rl) and [instinct_onboard](https://github.com/project-instinct/instinct_onboard) repositories.
-    - The core design of this ecosystem is to treat each experiment as a standalone structured folder, which start with a timestamp as a unique identifier.
-    - Adding `--exportonnx` flag to the `play.py` script will export the policy as an ONNX model. After that, you should directly copy the logdir to the robot computer and use the `instinct_onboard` workflow to run the policy on the real robot.
+- `Isolation`（隔离）：在 Isaac Lab 核心仓库之外工作，确保你的开发成果保持自包含。
+- `Flexibility`（灵活）：本模板已配置为允许你的代码以扩展（extension）的形式在 Omniverse 中运行。
+- `Unified Ecosystem`（统一生态）：本仓库是 Project-Instinct 生态的一部分，该生态还包括 [instinct_rl](https://github.com/project-instinct/instinct_rl) 和 [instinct_onboard](https://github.com/project-instinct/instinct_onboard) 仓库。
+    - 该生态的核心设计是将每个实验视为一个独立的、结构化的文件夹，文件夹以时间戳作为唯一标识开头。
+    - 给 `play.py` 脚本添加 `--exportonnx` 标志即可将策略导出为 ONNX 模型。之后，你应直接将 logdir 复制到机器人电脑上，并使用 `instinct_onboard` 工作流在真实机器人上运行该策略。
 
-**Keywords:** extension, template, isaaclab
+**关键词：** extension, template, isaaclab
 
-## Warning
-This codebase is under [CC BY-NC 4.0 license](LICENSE), with inherited license in IsaacLab. You may not use the material for commercial purposes, e.g., to make demos to advertise your commercial products or wrap the code for your own commercial purposes.
+## 警告
 
-## Contributing
-See our [Contributor Agreement](CONTRIBUTOR_AGREEMENT.md) for contribution guidelines. By contributing or submitting a pull request, you agree to transfer copyright ownership of your contributions to the project maintainers.
+本代码库遵循 [CC BY-NC 4.0 license](LICENSE) 许可，并继承了 IsaacLab 中的许可。你不得将该材料用于商业目的，例如制作演示来宣传你的商业产品，或将代码包装用于你自己的商业目的。
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
+## 贡献
 
-## Installation
+请参阅我们的 [Contributor Agreement](CONTRIBUTOR_AGREEMENT.md) 了解贡献指南。通过贡献或提交 pull request，你同意将你的贡献的版权所有权转让给项目维护者。
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) and **Switch to 5.1.0 version**. We recommend using the conda installation as it simplifies calling Python scripts from the terminal. The IsaacLab commit we are using is `f73c331738` on origin/main (post-v2.3.2).
+请参阅 [CONTRIBUTORS.md](CONTRIBUTORS.md) 获取已确认贡献者的名单。
 
-- Install Instinct-RL by following the [installation guide](https://github.com/project-instinct/instinct_rl/blob/main/README.md).
-    TL; DR;
+## 安装
+
+- 按照 [安装指南](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) 安装 Isaac Lab，并**切换到 5.1.0 版本**。我们推荐使用 conda 安装，因为它简化了从终端调用 Python 脚本的过程。我们使用的 IsaacLab commit 是 origin/main 上的 `f73c331738`（post-v2.3.2）。
+
+- 按照 [安装指南](https://github.com/project-instinct/instinct_rl/blob/main/README.md) 安装 Instinct-RL。
+    太长不看（TL; DR）：
     ```bash
     git clone https://github.com/project-instinct/instinct_rl.git
     python -m pip install -e instinct_rl
     ```
 
-- Clone this repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+- 将本仓库与 Isaac Lab 安装目录分开克隆（即放在 `IsaacLab` 目录之外）：
 
     ```bash
     # Option 1: HTTPS
@@ -52,13 +54,13 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
     git clone git@github.com:project-instinct/instinctlab.git
     ```
 
-- Using a python interpreter that has Isaac Lab installed, install the library
+- 使用已安装 Isaac Lab 的 Python 解释器安装该库：
 
     ```bash
     python -m pip install -e source/instinctlab
     ```
 
-- To run with `instinct-rl`, you can use the following command after installing [instinct-rl](https://github.com/project-instinct/instinct_rl):
+- 安装 [instinct-rl](https://github.com/project-instinct/instinct_rl) 后，要配合 `instinct-rl` 运行，可使用以下命令：
 
     ```bash
     python scripts/instinct_rl/train.py --task=Instinct-Shadowing-WholeBody-Plane-G1-Play-v0 --headless
@@ -66,63 +68,61 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
 
 ### Booster K1 locomotion
 
-The Booster K1 integration includes a full 22-DoF asset and a 12-DoF locomotion asset with calibrated motor,
-command-delay, and torque-speed parameters. Train or play the flat-ground task with:
+Booster K1 集成包含一个完整的 22 自由度（DoF）资产和一个 12 自由度（DoF）locomotion 资产，并带有已标定的电机、指令延迟和力矩-速度参数。使用以下命令训练或运行平地任务：
 
 ```bash
 python scripts/instinct_rl/train.py --task=Instinct-Locomotion-Flat-K1-v0 --headless
 python scripts/instinct_rl/play.py --task=Instinct-Locomotion-Flat-K1-Play-v0
 ```
 
-The K1 robot descriptions and meshes are redistributed under the BSD 3-Clause license in
-`source/instinctlab/instinctlab/assets/resources/booster_k1/LICENSE`.
+K1 机器人的描述与网格（mesh）按照 BSD 3-Clause 许可在
+`source/instinctlab/instinctlab/assets/resources/booster_k1/LICENSE` 中再分发。
 
-## Documentation of Critical Components
+## 关键组件文档
 
-- [Instinct-RL Documentation](https://github.com/project-instinct/instinct_rl/blob/main/README.md)
-- [InstinctLab Documentation](https://github.com/project-instinct/instinctlab/blob/main/DOCS.md)
+- [Instinct-RL 文档](https://github.com/project-instinct/instinct_rl/blob/main/README.md)
+- [InstinctLab 文档](https://github.com/project-instinct/instinctlab/blob/main/DOCS.md)
 
-### Set up IDE (Optional)
+### 设置 IDE（可选）
 
-To setup the IDE, please follow these instructions:
+要设置 IDE，请按照以下说明操作：
 
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu. When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
+- 运行 VSCode Tasks：按下 `Ctrl+Shift+P`，选择 `Tasks: Run Task`，然后在下拉菜单中运行 `setup_python_env`。运行该任务时，系统会提示你添加 Isaac Sim 安装目录的绝对路径。
 
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory. The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse. This helps in indexing all the python modules for intelligent suggestions while writing code.
+如果一切执行正确，它会在 `.vscode` 目录中创建一个文件 `.python.env`。该文件包含 Isaac Sim 和 Omniverse 提供的所有扩展的 python 路径。这有助于在编写代码时对所有 python 模块建立索引，从而提供智能补全提示。
 
+## 代码格式化
 
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+我们提供了一个 pre-commit 模板，用于自动格式化你的代码。
+安装 pre-commit：
 
 ```bash
 pip install pre-commit
 ```
 
-Then you can run pre-commit with:
+然后你可以用以下命令运行 pre-commit：
 
 ```bash
 pre-commit run --all-files
 ```
 
-To make the `pre-commit` run automatically on every commit, you can use the following command in your repository:
+要让 `pre-commit` 在每次提交时自动运行，可在你的仓库中使用以下命令：
 
 ```bash
 pre-commit install
 ```
 
-## Train your own projects
+## 训练你自己的项目
 
-***To preserve your code development and progress. PLEASE create your own repository as an individual project by referring to https://isaac-sim.github.io/IsaacLab/main/source/overview/own-project/index.html***
+***为了保留你的代码开发成果和进度，请参考 https://isaac-sim.github.io/IsaacLab/main/source/overview/own-project/index.html 将你自己的项目创建为独立仓库。***
 
-And copy `scripts/instinct_rl` to your own repository.
+并将 `scripts/instinct_rl` 复制到你自己的仓库中。
 
-### Or you are just to stubborn and want to fork and directly modify the code in this repo.
+### 或者你就是固执地想 fork 并直接修改本仓库中的代码。
 
-- Please create a new folder in the `source/instinctlab/instinctlab/tasks` directory. The name of the folder should be your project name. Inside the folder, DO add `__init__.py` in each level of the subfolders. (Many people tend to forget this step and could not find the supposely registered tasks.)
+- 请在 `source/instinctlab/instinctlab/tasks` 目录中新建一个文件夹。该文件夹的名称应为你的项目名称。在文件夹内部，务必（DO）在每一层子文件夹中添加 `__init__.py`。（很多人往往会忘记这一步，结果找不到本应注册的任务。）
 
-- We inherit the manager based RL env from IsaacLab to add new features. DO use `instinctlab.envs:InstinctRlEnv` as the entry_point in the `gym.register` call. For example, if you want to add a new task, you can use the following code:
+- 我们继承 IsaacLab 中基于 manager 的 RL env 来添加新特性。务必（DO）在 `gym.register` 调用中使用 `instinctlab.envs:InstinctRlEnv` 作为 entry_point。例如，如果你想添加一个新任务，可以使用以下代码：
 
 ```python
 import gymnasium as gym
@@ -139,11 +139,11 @@ gym.register(
 )
 ```
 
-## Troubleshooting
+## 故障排查
 
-### Pylance Missing Indexing of Extensions
+### Pylance 缺少对扩展的索引
 
-In some VsCode versions, the indexing of part of the extensions is missing. In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
+在某些 VsCode 版本中，部分扩展的索引会缺失。此时，请在 `.vscode/settings.json` 的 `"python.analysis.extraPaths"` 键下添加你的扩展路径。
 
 ```json
 {
