@@ -33,3 +33,57 @@ python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py --task=Insti
 - `--video`: Record training/playback videos
 - `--exportonnx`: Export the trained model to ONNX format for onboard deployment during playing
 - `--useonnx`: Use the ONNX model for inference during playing (requires `--exportonnx`)
+
+## Booster K1 Hiking in the Wild workflow
+
+The K1 task keeps the official Parkour terrain, depth perception, virtual-edge and
+foot-volume safety observations, AMP motion reference, and MoE policy. It replaces
+the G1 robot-specific asset, joint/link mappings, actuator limits, and contact
+geometry with the 22-DoF Booster K1 definitions.
+
+**Task IDs:**
+
+- Training: `Instinct-Parkour-Target-Amp-K1-v0`
+- Evaluation: `Instinct-Parkour-Target-Amp-K1-Play-v0`
+
+Retarget an SMPL-X motion with GMR, then convert the GMR pickle to the motion format
+consumed by InstinctLab:
+
+```bash
+python /home/ducks/GMR/scripts/smplx_to_robot.py \
+  --robot booster_k1 \
+  --smplx_file <motion_stageii.npz> \
+  --save_path <motion.pkl>
+
+python scripts/gmr/convert_k1_motion.py \
+  <motion.pkl> <dataset_dir>/<motion>.retargeted.npz
+```
+
+Create a motion-selection file such as `<dataset_dir>/motions.yaml`:
+
+```yaml
+selected_files:
+  - <motion>.retargeted.npz
+```
+
+Select the converted dataset and start training:
+
+```bash
+export INSTINCTLAB_K1_MOTION_DIR=<dataset_dir>
+export INSTINCTLAB_K1_MOTION_SELECTION=<dataset_dir>/motions.yaml
+
+python scripts/instinct_rl/train.py \
+  --headless --task=Instinct-Parkour-Target-Amp-K1-v0
+```
+
+Evaluate a checkpoint with the K1 play environment:
+
+```bash
+python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
+  --task=Instinct-Parkour-Target-Amp-K1-Play-v0 \
+  --load_run=<run_name>
+```
+
+The simulated depth camera uses a nominal K1 trunk mount. Measure the physical
+camera transform and update `camera.offset` in
+`config/k1/k1_parkour_target_amp_cfg.py` before real-robot deployment.
