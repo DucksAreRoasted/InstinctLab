@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 import copy
-import math
 import os
+
+from isaaclab.utils import configclass
 
 from instinctlab.assets.booster_k1 import (
     BOOSTER_K1_CFG,
@@ -25,8 +26,7 @@ from instinctlab.tasks.parkour.config.g1.g1_parkour_target_amp_cfg import (
     G1ParkourRoughEnvCfg,
     G1ParkourRoughEnvCfg_PLAY,
 )
-from isaaclab.utils import configclass
-
+from instinctlab.utils.noise import RangeBasedGaussianNoiseCfg
 
 K1_PARKOUR_LINKS = [
     "Trunk",
@@ -43,6 +43,18 @@ K1_PARKOUR_LINKS = [
     "right_foot_link",
 ]
 K1_PARKOUR_LINK_SYMMETRY = [0, 1, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10]
+
+# Live ``/boostercamera/head/depth/camera_info`` calibration.  The simulated
+# ray image stays small for training throughput, while its aperture preserves
+# the calibrated full-sensor field of view.
+K1_DEPTH_WIDTH_PX = 544
+K1_DEPTH_HEIGHT_PX = 448
+K1_DEPTH_FOCAL_LENGTH_PX = 210.77337743177728
+K1_DEPTH_PRINCIPAL_X_PX = 241.36559391021729
+K1_DEPTH_PRINCIPAL_Y_PX = 217.1773950913373
+K1_DEPTH_UPDATE_PERIOD_S = 0.05
+K1_DEPTH_HISTORY_LENGTH = 16
+K1_DEPTH_HISTORY_SKIP_FRAMES = 2
 
 K1_CFG = copy.deepcopy(BOOSTER_K1_CFG)
 K1_CFG.spawn.merge_fixed_joints = True
@@ -93,17 +105,51 @@ class K1ParkourConfigMixin:
         self.actions.joint_pos.scale = K1_ACTION_SCALE
         self.actions.joint_pos.clip = {".*": (-1.0, 1.0)}
 
-        self.scene.camera.prim_path = "{ENV_REGEX_NS}/Robot/Trunk"
+        # Measured on the production K1 from the live ROS TF transform
+        # ``head_pitch_link -> head_color_optical_frame``.  ``Head_2`` is the
+        # corresponding link in the simulation asset.  Keeping the camera on
+        # the articulated head preserves the physical effect of head motion.
+        self.scene.camera.prim_path = "{ENV_REGEX_NS}/Robot/Head_2"
         self.scene.camera.mesh_prim_paths = ["/World/ground", *get_link_prim_targets(K1_LINK_NAMES)]
-        # Nominal torso-to-ZED pose derived from the K1 head chain. Measure the
-        # production camera transform before real-robot deployment.
-        self.scene.camera.offset.pos = (0.08, 0.0, 0.34)
+        self.scene.camera.offset.pos = (0.05663342989, 0.0462427773, 0.0962657193)
         self.scene.camera.offset.rot = (
-            math.cos(math.radians(48.0) / 2),
-            0.0,
-            math.sin(math.radians(48.0) / 2),
-            0.0,
+            0.5132977331550982,
+            -0.5083061254903114,
+            0.4877471740434324,
+            -0.49015611200872644,
         )
+        self.scene.camera.offset.convention = "ros"
+        self.scene.camera.pattern_cfg.horizontal_aperture = K1_DEPTH_WIDTH_PX / K1_DEPTH_FOCAL_LENGTH_PX
+        self.scene.camera.pattern_cfg.vertical_aperture = K1_DEPTH_HEIGHT_PX / K1_DEPTH_FOCAL_LENGTH_PX
+        self.scene.camera.pattern_cfg.horizontal_aperture_offset = (
+            K1_DEPTH_PRINCIPAL_X_PX - K1_DEPTH_WIDTH_PX / 2
+        ) / K1_DEPTH_FOCAL_LENGTH_PX
+        self.scene.camera.pattern_cfg.vertical_aperture_offset = (
+            K1_DEPTH_PRINCIPAL_Y_PX - K1_DEPTH_HEIGHT_PX / 2
+        ) / K1_DEPTH_FOCAL_LENGTH_PX
+        self.scene.camera.update_period = K1_DEPTH_UPDATE_PERIOD_S
+        # Force sensor refreshes on physics ticks instead of waiting for the
+        # 50 Hz policy read.  Otherwise a 0.05 s lazy sensor updates at 0.06 s.
+        self.scene.camera.history_length = 1
+        # The 64x36 ray image is the downsampled full sensor.  Taking its lower
+        # central half yields the policy's 32x18 terrain-focused observation.
+        noise_pipeline = self.scene.camera.noise_pipeline
+        noise_pipeline["crop_and_resize"].crop_region = (18, 0, 16, 16)
+        self.scene.camera.noise_pipeline = {
+            "crop_and_resize": noise_pipeline["crop_and_resize"],
+            "gaussian_blur": noise_pipeline["gaussian_blur"],
+            # A 20-frame static sample on the robot showed a 12 mm median and
+            # 62 mm p90 inter-frame delta inside the policy's 2.5 m range.
+            "sensor_noise": RangeBasedGaussianNoiseCfg(
+                min_value=0.1,
+                max_value=2.5,
+                noise_std=0.02,
+            ),
+            "depth_normalization": noise_pipeline["depth_normalization"],
+        }
+        self.scene.camera.data_histories["distance_to_image_plane_noised"] = K1_DEPTH_HISTORY_LENGTH
+        for observation_group in (self.observations.policy, self.observations.critic):
+            observation_group.depth_image.params["history_skip_frames"] = K1_DEPTH_HISTORY_SKIP_FRAMES
 
         self.scene.left_height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/left_foot_link"
         self.scene.left_height_scanner.offset.pos = (0.014, 0.0, 20.0)

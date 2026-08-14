@@ -1,10 +1,10 @@
-import importlib.util
-import pickle
-
 import gymnasium as gym
+import importlib.util
 import numpy as np
-import pytest
+import pickle
 import torch
+
+import pytest
 
 try:
     _ISAAC_ACTUATORS_SPEC = importlib.util.find_spec("isaaclab.actuators")
@@ -14,6 +14,7 @@ except ModuleNotFoundError:
 if _ISAAC_ACTUATORS_SPEC is None:
     pytest.skip("requires pytest to run inside an Isaac Lab AppLauncher process", allow_module_level=True)
 
+from instinctlab.tasks.parkour.config.g1.g1_parkour_target_amp_cfg import G1ParkourRoughEnvCfg_PLAY
 from instinctlab.tasks.parkour.config.k1.k1_parkour_target_amp_cfg import (
     K1_PARKOUR_LINKS,
     K1ParkourEnvCfg,
@@ -46,7 +47,19 @@ def test_k1_hiking_config_uses_full_body_robot_and_gmr_links() -> None:
 def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:
     cfg = K1ParkourEnvCfg_PLAY()
 
-    assert cfg.scene.camera.prim_path.endswith("/Robot/Trunk")
+    assert cfg.scene.camera.prim_path.endswith("/Robot/Head_2")
+    assert cfg.scene.camera.offset.pos == pytest.approx(
+        (0.05663342989, 0.0462427773, 0.0962657193)
+    )
+    assert cfg.scene.camera.offset.rot == pytest.approx(
+        (
+            0.5132977331550982,
+            -0.5083061254903114,
+            0.4877471740434324,
+            -0.49015611200872644,
+        )
+    )
+    assert cfg.scene.camera.offset.convention == "ros"
     assert cfg.scene.left_height_scanner.prim_path.endswith("/Robot/left_foot_link")
     assert cfg.scene.right_height_scanner.prim_path.endswith("/Robot/right_foot_link")
     assert cfg.scene.leg_volume_points.prim_path.endswith("/Robot/.*_foot_link")
@@ -55,6 +68,45 @@ def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:
     assert cfg.scene.leg_volume_points.points_generator.z_min == pytest.approx(-0.024)
     assert cfg.rewards.rewards.pelvis_orientation_l2.params["asset_cfg"].body_names == "Trunk"
     assert cfg.terminations.base_contact.params["sensor_cfg"].body_names == "Trunk"
+
+
+def test_k1_depth_observation_matches_the_real_camera_sampling_contract() -> None:
+    cfg = K1ParkourEnvCfg_PLAY()
+
+    assert cfg.scene.camera.pattern_cfg.horizontal_aperture == pytest.approx(2.580971119922775)
+    assert cfg.scene.camera.pattern_cfg.vertical_aperture == pytest.approx(2.1255056281716973)
+    assert cfg.scene.camera.pattern_cfg.horizontal_aperture_offset == pytest.approx(-0.14534286285609482)
+    assert cfg.scene.camera.pattern_cfg.vertical_aperture_offset == pytest.approx(-0.03236938645570181)
+    assert cfg.scene.camera.pattern_cfg.width == 64
+    assert cfg.scene.camera.pattern_cfg.height == 36
+    assert cfg.scene.camera.update_period == pytest.approx(0.05)
+    assert cfg.scene.camera.history_length == 1
+    assert cfg.scene.camera.noise_pipeline["crop_and_resize"].crop_region == (18, 0, 16, 16)
+    assert cfg.scene.camera.data_histories["distance_to_image_plane_noised"] == 16
+    assert cfg.observations.policy.depth_image.params["history_skip_frames"] == 2
+    assert cfg.observations.critic.depth_image.params["history_skip_frames"] == 2
+    assert cfg.observations.policy.depth_image.params["num_output_frames"] == 8
+
+
+def test_k1_depth_noise_matches_observed_real_camera_variation() -> None:
+    cfg = K1ParkourEnvCfg_PLAY()
+
+    pipeline = cfg.scene.camera.noise_pipeline
+    assert list(pipeline) == ["crop_and_resize", "gaussian_blur", "sensor_noise", "depth_normalization"]
+    assert pipeline["sensor_noise"].min_value == pytest.approx(0.1)
+    assert pipeline["sensor_noise"].max_value == pytest.approx(2.5)
+    assert pipeline["sensor_noise"].noise_std == pytest.approx(0.02)
+
+
+def test_k1_depth_calibration_does_not_change_the_g1_camera_contract() -> None:
+    K1ParkourEnvCfg_PLAY()
+    g1_cfg = G1ParkourRoughEnvCfg_PLAY()
+
+    assert g1_cfg.scene.camera.pattern_cfg.horizontal_aperture == pytest.approx(1.9829684971963653)
+    assert g1_cfg.scene.camera.pattern_cfg.vertical_aperture == pytest.approx(1.1152440419261633)
+    assert g1_cfg.scene.camera.update_period == pytest.approx(0.02)
+    assert g1_cfg.scene.camera.data_histories["distance_to_image_plane_noised"] == 37
+    assert "sensor_noise" not in g1_cfg.scene.camera.noise_pipeline
 
 
 def test_k1_hiking_environment_can_reset_and_step_with_retargeted_motion(tmp_path) -> None:
