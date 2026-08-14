@@ -64,6 +64,19 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
     python scripts/instinct_rl/train.py --task=Instinct-Shadowing-WholeBody-Plane-G1-Play-v0 --headless
     ```
 
+### Booster K1 locomotion
+
+The Booster K1 integration includes a full 22-DoF asset and a 12-DoF locomotion asset with calibrated motor,
+command-delay, and torque-speed parameters. Train or play the flat-ground task with:
+
+```bash
+python scripts/instinct_rl/train.py --task=Instinct-Locomotion-Flat-K1-v0 --headless
+python scripts/instinct_rl/play.py --task=Instinct-Locomotion-Flat-K1-Play-v0
+```
+
+The K1 robot descriptions and meshes are redistributed under the BSD 3-Clause license in
+`source/instinctlab/instinctlab/assets/resources/booster_k1/LICENSE`.
+
 ## Documentation of Critical Components
 
 - [Instinct-RL Documentation](https://github.com/project-instinct/instinct_rl/blob/main/README.md)
