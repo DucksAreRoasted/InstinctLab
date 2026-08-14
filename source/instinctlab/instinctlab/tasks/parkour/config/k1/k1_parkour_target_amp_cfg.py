@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import os
+from pathlib import Path
 
 from isaaclab.utils import configclass
 
@@ -55,6 +56,7 @@ K1_DEPTH_PRINCIPAL_Y_PX = 217.1773950913373
 K1_DEPTH_UPDATE_PERIOD_S = 0.05
 K1_DEPTH_HISTORY_LENGTH = 16
 K1_DEPTH_HISTORY_SKIP_FRAMES = 2
+K1_MOTION_PACKAGE_DIR = Path(__file__).resolve().parents[7] / "parkour_motion_reference" / "booster_k1"
 
 K1_CFG = copy.deepcopy(BOOSTER_K1_CFG)
 K1_CFG.spawn.merge_fixed_joints = True
@@ -65,10 +67,10 @@ K1_CFG.init_state.pos = (0.0, 0.0, 0.57)
 class K1AmassMotionCfg(AmassMotionCfgBase):
     """K1 motions retargeted with GMR's ``smplx_to_k1.json`` constraints."""
 
-    path = os.path.expanduser(os.environ.get("INSTINCTLAB_K1_MOTION_DIR", "~/Datasets/K1"))
+    path = os.path.expanduser(os.environ.get("INSTINCTLAB_K1_MOTION_DIR", str(K1_MOTION_PACKAGE_DIR)))
     retargetting_func = None
     filtered_motion_selection_filepath = os.path.expanduser(
-        os.environ.get("INSTINCTLAB_K1_MOTION_SELECTION", "~/Datasets/K1/parkour_motion_without_run.yaml")
+        os.environ.get("INSTINCTLAB_K1_MOTION_SELECTION", str(Path(path) / "motions.yaml"))
     )
     motion_start_from_middle_range = [0.0, 0.9]
     motion_start_height_offset = 0.0

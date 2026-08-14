@@ -59,14 +59,26 @@ python scripts/gmr/convert_k1_motion.py \
   <motion.pkl> <dataset_dir>/<motion>.retargeted.npz
 ```
 
-Create a motion-selection file such as `<dataset_dir>/motions.yaml`:
+The repository includes all 19 released parkour trajectories retargeted for K1
+under `parkour_motion_reference/booster_k1`. Its `motions.yaml` loads the
+separate clips into one AMP training set while preserving their reset
+boundaries. After copying the complete project to a server, start training
+directly:
+
+```bash
+python scripts/instinct_rl/train.py \
+  --headless --task=Instinct-Parkour-Target-Amp-K1-v0
+```
+
+For a custom dataset, create a motion-selection file such as
+`<dataset_dir>/motions.yaml`:
 
 ```yaml
 selected_files:
   - <motion>.retargeted.npz
 ```
 
-Select the converted dataset and start training:
+Select the custom dataset and start training:
 
 ```bash
 export INSTINCTLAB_K1_MOTION_DIR=<dataset_dir>

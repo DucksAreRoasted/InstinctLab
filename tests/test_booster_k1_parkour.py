@@ -3,6 +3,7 @@ import importlib.util
 import numpy as np
 import pickle
 import torch
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +18,7 @@ if _ISAAC_ACTUATORS_SPEC is None:
 from instinctlab.tasks.parkour.config.g1.g1_parkour_target_amp_cfg import G1ParkourRoughEnvCfg_PLAY
 from instinctlab.tasks.parkour.config.k1.k1_parkour_target_amp_cfg import (
     K1_PARKOUR_LINKS,
+    K1AmassMotionCfg,
     K1ParkourEnvCfg,
     K1ParkourEnvCfg_PLAY,
 )
@@ -30,6 +32,14 @@ def test_k1_hiking_train_and_play_tasks_are_registered() -> None:
     assert train_spec.kwargs["env_cfg_entry_point"].endswith(":K1ParkourEnvCfg")
     assert play_spec.kwargs["env_cfg_entry_point"].endswith(":K1ParkourEnvCfg_PLAY")
     assert train_spec.kwargs["instinct_rl_cfg_entry_point"].endswith(":K1ParkourPPORunnerCfg")
+
+
+def test_k1_motion_defaults_are_portable_with_the_project() -> None:
+    motion_cfg = K1AmassMotionCfg()
+    package_dir = Path(__file__).resolve().parents[1] / "parkour_motion_reference" / "booster_k1"
+
+    assert Path(motion_cfg.path) == package_dir
+    assert Path(motion_cfg.filtered_motion_selection_filepath) == package_dir / "motions.yaml"
 
 
 def test_k1_hiking_config_uses_full_body_robot_and_gmr_links() -> None:
