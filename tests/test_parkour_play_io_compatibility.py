@@ -50,3 +50,25 @@ def test_parkour_play_supports_a_free_viewport_camera() -> None:
 
     assert "--free_camera" in argument_flags
     assert 'env_cfg.viewer.origin_type = "world"' in source
+
+
+def test_parkour_play_can_override_forward_command_for_all_envs() -> None:
+    play_script = (
+        Path(__file__).resolve().parents[1]
+        / "source/instinctlab/instinctlab/tasks/parkour/scripts/play.py"
+    )
+    source = play_script.read_text()
+    tree = ast.parse(source)
+    argument_flags = {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_argument"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+    }
+
+    assert "--command_x" in argument_flags
+    assert "args_cli.command_x is not None" in source
+    assert "override_command[:, 0] = args_cli.command_x" in source

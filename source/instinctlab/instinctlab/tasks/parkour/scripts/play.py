@@ -42,12 +42,20 @@ parser.add_argument(
     default=False,
     help="Use a world-relative viewport camera that can be moved manually instead of following the robot.",
 )
+parser.add_argument(
+    "--command_x",
+    type=float,
+    default=None,
+    help="Override every environment's policy observation with a fixed forward velocity in [0.0, 1.0] m/s.",
+)
 
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if args_cli.command_x is not None and not 0.0 <= args_cli.command_x <= 1.0:
+    parser.error("--command_x must be between 0.0 and 1.0 m/s, matching the training command range.")
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
@@ -212,15 +220,18 @@ def main():
         )
 
     override_command = torch.zeros(env.num_envs, 3, device=env.device)
+    if args_cli.command_x is not None:
+        override_command[:, 0] = args_cli.command_x
+        print(f"[INFO] Overriding all policy forward-velocity commands with {args_cli.command_x:.2f} m/s.")
     command_obs_slice = get_obs_slice(env.get_obs_segments(), "velocity_commands")
 
     def on_keyboard_input(e):
         if e.input == carb.input.KeyboardInput.W:
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
-                override_command[:, 0] += args_cli.keyboard_linvel_step
+                override_command[:, 0].add_(args_cli.keyboard_linvel_step).clamp_(min=0.0, max=1.0)
         if e.input == carb.input.KeyboardInput.S:
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
-                override_command[:, 2] = 0.0
+                override_command[:, 0].sub_(args_cli.keyboard_linvel_step).clamp_(min=0.0, max=1.0)
         if e.input == carb.input.KeyboardInput.F:
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
                 override_command[:, 2] = args_cli.keyboard_angvel
@@ -244,7 +255,7 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            if args_cli.keyboard_control:
+            if args_cli.keyboard_control or args_cli.command_x is not None:
                 obs[:, command_obs_slice[0]] = override_command.repeat(1, command_obs_slice[1][0] // 3)
             actions = policy(obs)
             if args_cli.useonnx:
