@@ -91,10 +91,11 @@ K1_DEPTH_UPDATE_PERIOD_S = 0.05   # 深度相机刷新周期：0.05s = 20 Hz
 # 历史缓冲保存最近 16 帧，观测时每隔 2 帧取 1 帧（见下方 obs 相关注释）。
 K1_DEPTH_HISTORY_LENGTH = 16
 K1_DEPTH_HISTORY_SKIP_FRAMES = 2
-# K1 动作参考数据包目录（GMR 重定向后的越野跑动作），可用环境变量覆盖。
+# K1 动作参考数据包目录（AMASS-CMU 直接重定向的走、跑和楼梯动作），
+# 可用环境变量覆盖。
 # parents[7]：__file__ 位于 InstinctLab/source/instinctlab/instinctlab/
 # tasks/parkour/config/k1/ 下，向上 7 层回到仓库根目录 InstinctLab/。
-K1_MOTION_PACKAGE_DIR = Path(__file__).resolve().parents[7] / "parkour_motion_reference" / "booster_k1"
+K1_MOTION_PACKAGE_DIR = Path(__file__).resolve().parents[7] / "parkour_motion_reference" / "booster_k1_v2"
 
 # 复制一份 K1 资产配置作为本任务专用。
 # copy.deepcopy 是必须的：BOOSTER_K1_CFG 是 assets/booster_k1.py 中的
@@ -188,9 +189,9 @@ class K1ParkourConfigMixin:
         self.scene.robot = K1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.motion_reference = copy.deepcopy(K1_MOTION_REFERENCE_CFG)
 
-        # G1 的躯干初始高度为 0.9 m，K1 只有 0.57 m。楼梯尺寸不能直接沿用
-        # G1 的 23/45 cm 上限。深拷贝地形模板后，同时缩小上楼梯和下楼梯，
-        # 确保 K1 训练配置不会污染共享的 G1 地形配置。
+        # G1 的躯干初始高度为 0.9 m，K1 只有 0.57 m。楼梯与箱体尺寸不能
+        # 直接沿用 G1 的 23/45 cm 上限。深拷贝地形模板后缩小全部台阶类
+        # 障碍，确保 K1 训练配置不会污染共享的 G1 地形配置。
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator = copy.deepcopy(self.scene.terrain.terrain_generator)
             k1_terrain = self.scene.terrain.terrain_generator
@@ -198,6 +199,9 @@ class K1ParkourConfigMixin:
                 k1_terrain.sub_terrains[terrain_name].step_height_range = (0.04, 0.14)
             for terrain_name in ("pyramid_stairs_high", "pyramid_stairs_inv_high"):
                 k1_terrain.sub_terrains[terrain_name].step_height_range = (0.05, 0.22)
+            k1_terrain.sub_terrains["boxes"].obstacle_height_range = (0.05, 0.22)
+            k1_terrain.sub_terrains["mesh_boxes"].box_height_mean = [0.07, 0.20]
+            k1_terrain.sub_terrains["mesh_boxes"].box_height_range = 0.02
 
         # 2. 动作空间
         # self.actions 是 ActionManagerCfg；joint_pos 是 G1 配置里定义的
@@ -420,6 +424,9 @@ class K1ParkourEnvCfg_PLAY(G1ParkourRoughEnvCfg_PLAY, K1ParkourConfigMixin):
                 play_terrain.sub_terrains[terrain_name].step_height_range = (0.04, 0.10)
             for terrain_name in ("pyramid_stairs_high", "pyramid_stairs_inv_high"):
                 play_terrain.sub_terrains[terrain_name].step_height_range = (0.05, 0.14)
+            play_terrain.sub_terrains["boxes"].obstacle_height_range = (0.05, 0.14)
+            play_terrain.sub_terrains["mesh_boxes"].box_height_mean = [0.07, 0.12]
+            play_terrain.sub_terrains["mesh_boxes"].box_height_range = 0.02
         # debug_vis：传感器/命令的调试可视化开关，回放时关掉避免画面杂乱
         self.scene.leg_volume_points.debug_vis = False
         self.commands.base_velocity.debug_vis = False

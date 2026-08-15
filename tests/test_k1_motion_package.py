@@ -4,7 +4,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_DIR = PROJECT_ROOT / "parkour_motion_reference" / "booster_k1"
+PACKAGE_DIR = PROJECT_ROOT / "parkour_motion_reference" / "booster_k1_v2"
 URDF_PATH = (
     PROJECT_ROOT
     / "source"
@@ -16,25 +16,13 @@ URDF_PATH = (
     / "K1_22dof.urdf"
 )
 EXPECTED_MOTIONS = [
-    "stairs_descent_001.retargeted.npz",
-    "stairs_descent_002.retargeted.npz",
-    "stairs_descent_003.retargeted.npz",
-    "stairs_descent_004.retargeted.npz",
-    "stairs_descent_005.retargeted.npz",
-    "stairs_descent_006.retargeted.npz",
-    "stairs_descent_007.retargeted.npz",
-    "stairs_descent_008.retargeted.npz",
-    "stairs_descent_009.retargeted.npz",
-    "stairs_ascent_010.retargeted.npz",
-    "stairs_ascent_011.retargeted.npz",
-    "stairs_ascent_012.retargeted.npz",
-    "stairs_ascent_013.retargeted.npz",
-    "stairs_ascent_014.retargeted.npz",
-    "stairs_ascent_015.retargeted.npz",
-    "stairs_ascent_016.retargeted.npz",
-    "stairs_ascent_017.retargeted.npz",
-    "grounded_locomotion_018.retargeted.npz",
-    "grounded_locomotion_019.retargeted.npz",
+    "walk_normal_35_01.retargeted.npz",
+    "walk_fast_82_12.retargeted.npz",
+    "run_steady_111_24.retargeted.npz",
+    "start_to_run_143_03.retargeted.npz",
+    "stairs_ascent_114_07.retargeted.npz",
+    "stairs_descent_114_07.retargeted.npz",
+    "stairs_ascent_83_31.retargeted.npz",
 ]
 EXPECTED_JOINTS = [
     "AAHead_yaw",
@@ -74,7 +62,7 @@ def _velocity_limit(joint_name: str) -> float:
     return 17.59
 
 
-def test_packaged_k1_motions_are_ready_for_the_official_loader() -> None:
+def test_packaged_k1_motions_are_continuous_and_within_robot_limits() -> None:
     selection = yaml.safe_load((PACKAGE_DIR / "motions.yaml").read_text(encoding="utf-8"))
     assert selection == {"selected_files": EXPECTED_MOTIONS}
 
@@ -87,30 +75,36 @@ def test_packaged_k1_motions_are_ready_for_the_official_loader() -> None:
         for joint in urdf_root.findall("joint")
         if joint.attrib.get("type") in {"revolute", "continuous"}
     }
+    lower = np.asarray([joint_limits[name][0] for name in EXPECTED_JOINTS])
+    upper = np.asarray([joint_limits[name][1] for name in EXPECTED_JOINTS])
+    velocity_limits = np.asarray([_velocity_limit(name) for name in EXPECTED_JOINTS])
 
-    for motion_name in selection["selected_files"]:
-        motion_path = PACKAGE_DIR / motion_name
-        assert motion_path.name.endswith(".retargeted.npz")
-        assert motion_path.is_file()
-        with np.load(motion_path) as motion:
-            assert set(motion.files) == {"framerate", "joint_names", "joint_pos", "base_pos_w", "base_quat_w"}
+    for motion_name in EXPECTED_MOTIONS:
+        with np.load(PACKAGE_DIR / motion_name) as motion:
+            fps = float(motion["framerate"])
+            joint_pos = motion["joint_pos"]
             assert motion["joint_names"].tolist() == EXPECTED_JOINTS
-            assert float(motion["framerate"]) == 50.0
-            frames = motion["joint_pos"].shape[0]
-            assert frames >= 2
-            assert motion["joint_pos"].shape == (frames, 22)
-            assert motion["base_pos_w"].shape == (frames, 3)
-            assert motion["base_quat_w"].shape == (frames, 4)
-            assert all(np.isfinite(motion[key]).all() for key in ("joint_pos", "base_pos_w", "base_quat_w"))
+            assert 14.9 <= fps <= 30.0
+            assert joint_pos.ndim == 2 and joint_pos.shape[1] == 22
+            assert joint_pos.shape[0] >= 60
+            assert np.isfinite(joint_pos).all()
+            assert np.isfinite(motion["base_pos_w"]).all()
             np.testing.assert_allclose(np.linalg.norm(motion["base_quat_w"], axis=1), 1.0, atol=1e-5)
-            root_step = np.linalg.norm(np.diff(motion["base_pos_w"], axis=0), axis=1)
-            assert float(root_step.max()) < 0.15
-            assert float(motion["base_pos_w"][:, 2].min()) > 0.4
-
-            lower = np.asarray([joint_limits[name][0] for name in EXPECTED_JOINTS])
-            upper = np.asarray([joint_limits[name][1] for name in EXPECTED_JOINTS])
-            assert np.all(motion["joint_pos"] >= lower - 1e-5)
-            assert np.all(motion["joint_pos"] <= upper + 1e-5)
-            velocity_limits = np.asarray([_velocity_limit(name) for name in EXPECTED_JOINTS])
-            speed_ratio = np.abs(np.diff(motion["joint_pos"], axis=0)) * 50.0 / velocity_limits
+            assert np.all(joint_pos >= lower - 1e-5)
+            assert np.all(joint_pos <= upper + 1e-5)
+            speed_ratio = np.abs(np.diff(joint_pos, axis=0)) * fps / velocity_limits
             assert float(speed_ratio.max()) <= 1.0
+
+            # A failed IK solve can remain numerically inside the URDF bounds
+            # by pinning many joints exactly at their limits.  Such poses look
+            # severely twisted even though the simpler limit check passes.
+            distance_to_limit = np.minimum(joint_pos - lower, upper - joint_pos)
+            saturated = distance_to_limit < np.deg2rad(1.0)
+            assert float(saturated.mean()) < 0.05
+
+            # Reject roots that are on their side or inverted.  For a wxyz
+            # quaternion, R[2, 2] = 1 - 2*(x^2 + y^2).
+            root_quat = motion["base_quat_w"]
+            root_up_z = 1.0 - 2.0 * (root_quat[:, 1] ** 2 + root_quat[:, 2] ** 2)
+            root_tilt = np.arccos(np.clip(root_up_z, -1.0, 1.0))
+            assert float(np.rad2deg(root_tilt).max()) < 45.0

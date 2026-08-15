@@ -59,11 +59,12 @@ python scripts/gmr/convert_k1_motion.py \
   <motion.pkl> <dataset_dir>/<motion>.retargeted.npz
 ```
 
-The repository includes all 19 released parkour trajectories retargeted for K1
-under `parkour_motion_reference/booster_k1`. Its `motions.yaml` loads the
-separate clips into one AMP training set while preserving their reset
-boundaries. After copying the complete project to a server, start training
-directly:
+The repository includes seven curated AMASS-CMU trajectories retargeted
+directly for K1 under `parkour_motion_reference/booster_k1_v2`: normal and
+fast walking, running, a start-to-run transition, two stair ascents, and one
+stair descent. Its `motions.yaml` loads the separate clips into one AMP
+training set while preserving their reset boundaries. After copying the
+complete project to a server, start training directly:
 
 ```bash
 python scripts/instinct_rl/train.py \

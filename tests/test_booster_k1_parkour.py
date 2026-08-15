@@ -36,7 +36,7 @@ def test_k1_hiking_train_and_play_tasks_are_registered() -> None:
 
 def test_k1_motion_defaults_are_portable_with_the_project() -> None:
     motion_cfg = K1AmassMotionCfg()
-    package_dir = Path(__file__).resolve().parents[1] / "parkour_motion_reference" / "booster_k1"
+    package_dir = Path(__file__).resolve().parents[1] / "parkour_motion_reference" / "booster_k1_v2"
 
     assert Path(motion_cfg.path) == package_dir
     assert Path(motion_cfg.filtered_motion_selection_filepath) == package_dir / "motions.yaml"
@@ -65,6 +65,9 @@ def test_k1_play_scene_is_small_enough_for_checkpoint_inspection() -> None:
     assert sub_terrains["pyramid_stairs_high"].step_height_range == pytest.approx((0.05, 0.14))
     assert sub_terrains["pyramid_stairs_inv"].step_height_range == pytest.approx((0.04, 0.10))
     assert sub_terrains["pyramid_stairs_inv_high"].step_height_range == pytest.approx((0.05, 0.14))
+    assert sub_terrains["boxes"].obstacle_height_range == pytest.approx((0.05, 0.14))
+    assert sub_terrains["mesh_boxes"].box_height_mean == pytest.approx((0.07, 0.12))
+    assert sub_terrains["mesh_boxes"].box_height_range == pytest.approx(0.02)
     assert cfg.scene.leg_volume_points.debug_vis is False
     assert cfg.commands.base_velocity.debug_vis is False
 
@@ -73,31 +76,27 @@ def test_k1_play_scene_does_not_shrink_training_or_g1_play() -> None:
     K1ParkourEnvCfg_PLAY()
     train_cfg = K1ParkourEnvCfg()
     g1_play_cfg = G1ParkourRoughEnvCfg_PLAY()
+    train_terrain = train_cfg.scene.terrain.terrain_generator.sub_terrains
+    g1_terrain = g1_play_cfg.scene.terrain.terrain_generator.sub_terrains
 
     assert train_cfg.scene.num_envs == 4096
     assert train_cfg.scene.terrain.terrain_generator.num_rows == 10
     assert train_cfg.scene.terrain.terrain_generator.num_cols == 20
-    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs"
-    ].step_height_range == pytest.approx((0.04, 0.14))
-    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs_high"
-    ].step_height_range == pytest.approx((0.05, 0.22))
-    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs_inv"
-    ].step_height_range == pytest.approx((0.04, 0.14))
-    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs_inv_high"
-    ].step_height_range == pytest.approx((0.05, 0.22))
+    assert train_terrain["pyramid_stairs"].step_height_range == pytest.approx((0.04, 0.14))
+    assert train_terrain["pyramid_stairs_high"].step_height_range == pytest.approx((0.05, 0.22))
+    assert train_terrain["pyramid_stairs_inv"].step_height_range == pytest.approx((0.04, 0.14))
+    assert train_terrain["pyramid_stairs_inv_high"].step_height_range == pytest.approx((0.05, 0.22))
+    assert train_terrain["boxes"].obstacle_height_range == pytest.approx((0.05, 0.22))
+    assert train_terrain["mesh_boxes"].box_height_mean == pytest.approx((0.07, 0.20))
+    assert train_terrain["mesh_boxes"].box_height_range == pytest.approx(0.02)
     assert g1_play_cfg.scene.num_envs == 10
     assert g1_play_cfg.scene.terrain.terrain_generator.num_rows == 4
     assert g1_play_cfg.scene.terrain.terrain_generator.num_cols == 10
-    assert g1_play_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs"
-    ].step_height_range == pytest.approx((0.05, 0.23))
-    assert g1_play_cfg.scene.terrain.terrain_generator.sub_terrains[
-        "pyramid_stairs_high"
-    ].step_height_range == pytest.approx((0.05, 0.45))
+    assert g1_terrain["pyramid_stairs"].step_height_range == pytest.approx((0.05, 0.23))
+    assert g1_terrain["pyramid_stairs_high"].step_height_range == pytest.approx((0.05, 0.45))
+    assert g1_terrain["boxes"].obstacle_height_range == pytest.approx((0.05, 0.45))
+    assert g1_terrain["mesh_boxes"].box_height_mean == pytest.approx((0.1, 0.4))
+    assert g1_terrain["mesh_boxes"].box_height_range == pytest.approx(0.05)
 
 
 def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:
