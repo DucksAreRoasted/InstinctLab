@@ -209,3 +209,13 @@ class K1ParkourEnvCfg_PLAY(G1ParkourRoughEnvCfg_PLAY, K1ParkourConfigMixin):
     def __post_init__(self):
         super().__post_init__()
         self.apply_k1_config()
+
+        # Checkpoint inspection needs one representative terrain row, not the
+        # larger G1 debug scene. Keep all ten terrain columns while avoiding
+        # unused replicated meshes and debug geometry in video playback.
+        self.scene.num_envs = 1
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 1
+            self.scene.terrain.terrain_generator.num_cols = 10
+        self.scene.leg_volume_points.debug_vis = False
+        self.commands.base_velocity.debug_vis = False

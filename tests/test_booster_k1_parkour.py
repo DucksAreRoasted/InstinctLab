@@ -54,6 +54,29 @@ def test_k1_hiking_config_uses_full_body_robot_and_gmr_links() -> None:
     assert cfg.scene.motion_reference.symmetric_augmentation_link_mapping == [0, 1, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10]
 
 
+def test_k1_play_scene_is_small_enough_for_checkpoint_inspection() -> None:
+    cfg = K1ParkourEnvCfg_PLAY()
+
+    assert cfg.scene.num_envs == 1
+    assert cfg.scene.terrain.terrain_generator.num_rows == 1
+    assert cfg.scene.terrain.terrain_generator.num_cols == 10
+    assert cfg.scene.leg_volume_points.debug_vis is False
+    assert cfg.commands.base_velocity.debug_vis is False
+
+
+def test_k1_play_scene_does_not_shrink_training_or_g1_play() -> None:
+    K1ParkourEnvCfg_PLAY()
+    train_cfg = K1ParkourEnvCfg()
+    g1_play_cfg = G1ParkourRoughEnvCfg_PLAY()
+
+    assert train_cfg.scene.num_envs == 4096
+    assert train_cfg.scene.terrain.terrain_generator.num_rows == 10
+    assert train_cfg.scene.terrain.terrain_generator.num_cols == 20
+    assert g1_play_cfg.scene.num_envs == 10
+    assert g1_play_cfg.scene.terrain.terrain_generator.num_rows == 4
+    assert g1_play_cfg.scene.terrain.terrain_generator.num_cols == 10
+
+
 def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:
     cfg = K1ParkourEnvCfg_PLAY()
 
