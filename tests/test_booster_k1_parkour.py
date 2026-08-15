@@ -56,10 +56,15 @@ def test_k1_hiking_config_uses_full_body_robot_and_gmr_links() -> None:
 
 def test_k1_play_scene_is_small_enough_for_checkpoint_inspection() -> None:
     cfg = K1ParkourEnvCfg_PLAY()
+    sub_terrains = cfg.scene.terrain.terrain_generator.sub_terrains
 
     assert cfg.scene.num_envs == 1
     assert cfg.scene.terrain.terrain_generator.num_rows == 1
     assert cfg.scene.terrain.terrain_generator.num_cols == 10
+    assert sub_terrains["pyramid_stairs"].step_height_range == pytest.approx((0.04, 0.10))
+    assert sub_terrains["pyramid_stairs_high"].step_height_range == pytest.approx((0.05, 0.14))
+    assert sub_terrains["pyramid_stairs_inv"].step_height_range == pytest.approx((0.04, 0.10))
+    assert sub_terrains["pyramid_stairs_inv_high"].step_height_range == pytest.approx((0.05, 0.14))
     assert cfg.scene.leg_volume_points.debug_vis is False
     assert cfg.commands.base_velocity.debug_vis is False
 
@@ -72,9 +77,27 @@ def test_k1_play_scene_does_not_shrink_training_or_g1_play() -> None:
     assert train_cfg.scene.num_envs == 4096
     assert train_cfg.scene.terrain.terrain_generator.num_rows == 10
     assert train_cfg.scene.terrain.terrain_generator.num_cols == 20
+    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs"
+    ].step_height_range == pytest.approx((0.04, 0.14))
+    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs_high"
+    ].step_height_range == pytest.approx((0.05, 0.22))
+    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs_inv"
+    ].step_height_range == pytest.approx((0.04, 0.14))
+    assert train_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs_inv_high"
+    ].step_height_range == pytest.approx((0.05, 0.22))
     assert g1_play_cfg.scene.num_envs == 10
     assert g1_play_cfg.scene.terrain.terrain_generator.num_rows == 4
     assert g1_play_cfg.scene.terrain.terrain_generator.num_cols == 10
+    assert g1_play_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs"
+    ].step_height_range == pytest.approx((0.05, 0.23))
+    assert g1_play_cfg.scene.terrain.terrain_generator.sub_terrains[
+        "pyramid_stairs_high"
+    ].step_height_range == pytest.approx((0.05, 0.45))
 
 
 def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:

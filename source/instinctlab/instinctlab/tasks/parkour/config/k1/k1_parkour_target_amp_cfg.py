@@ -188,6 +188,17 @@ class K1ParkourConfigMixin:
         self.scene.robot = K1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.motion_reference = copy.deepcopy(K1_MOTION_REFERENCE_CFG)
 
+        # G1 的躯干初始高度为 0.9 m，K1 只有 0.57 m。楼梯尺寸不能直接沿用
+        # G1 的 23/45 cm 上限。深拷贝地形模板后，同时缩小上楼梯和下楼梯，
+        # 确保 K1 训练配置不会污染共享的 G1 地形配置。
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator = copy.deepcopy(self.scene.terrain.terrain_generator)
+            k1_terrain = self.scene.terrain.terrain_generator
+            for terrain_name in ("pyramid_stairs", "pyramid_stairs_inv"):
+                k1_terrain.sub_terrains[terrain_name].step_height_range = (0.04, 0.14)
+            for terrain_name in ("pyramid_stairs_high", "pyramid_stairs_inv_high"):
+                k1_terrain.sub_terrains[terrain_name].step_height_range = (0.05, 0.22)
+
         # 2. 动作空间
         # self.actions 是 ActionManagerCfg；joint_pos 是 G1 配置里定义的
         # JointPositionActionCfg（位置控制动作项）。
@@ -397,8 +408,18 @@ class K1ParkourEnvCfg_PLAY(G1ParkourRoughEnvCfg_PLAY, K1ParkourConfigMixin):
         self.scene.num_envs = 1
         # TerrainGeneratorCfg：地形生成器，num_rows/num_cols 是地形格子的行列数
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 1
-            self.scene.terrain.terrain_generator.num_cols = 10
+            # G1 Play 配置持有模块级地形模板；先深拷贝，避免 K1 演示参数
+            # 污染 G1 回放或后续实例。
+            self.scene.terrain.terrain_generator = copy.deepcopy(self.scene.terrain.terrain_generator)
+            play_terrain = self.scene.terrain.terrain_generator
+            play_terrain.num_rows = 1
+            play_terrain.num_cols = 10
+
+            # 演示环境使用训练范围的较低子集，便于直观检查当前 checkpoint。
+            for terrain_name in ("pyramid_stairs", "pyramid_stairs_inv"):
+                play_terrain.sub_terrains[terrain_name].step_height_range = (0.04, 0.10)
+            for terrain_name in ("pyramid_stairs_high", "pyramid_stairs_inv_high"):
+                play_terrain.sub_terrains[terrain_name].step_height_range = (0.05, 0.14)
         # debug_vis：传感器/命令的调试可视化开关，回放时关掉避免画面杂乱
         self.scene.leg_volume_points.debug_vis = False
         self.commands.base_velocity.debug_vis = False
