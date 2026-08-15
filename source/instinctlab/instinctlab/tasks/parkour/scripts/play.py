@@ -36,6 +36,12 @@ parser.add_argument("--zero_act_until", type=int, default=0, help="Zero actions 
 parser.add_argument("--keyboard_control", action="store_true", default=False, help="Enable keyboard control.")
 parser.add_argument("--keyboard_linvel_step", type=float, default=0.5, help="Linear velocity change per keyboard step.")
 parser.add_argument("--keyboard_angvel", type=float, default=1.0, help="Angular velocity set by keyboard.")
+parser.add_argument(
+    "--free_camera",
+    action="store_true",
+    default=False,
+    help="Use a world-relative viewport camera that can be moved manually instead of following the robot.",
+)
 
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
@@ -90,6 +96,11 @@ def main():
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
     agent_cfg: InstinctRlOnPolicyRunnerCfg = cli_args.parse_instinct_rl_cfg(args_cli.task, args_cli)
+
+    if args_cli.free_camera:
+        env_cfg.viewer.origin_type = "world"
+        env_cfg.viewer.asset_name = None
+        env_cfg.viewer.body_name = None
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "instinct_rl", agent_cfg.experiment_name)
