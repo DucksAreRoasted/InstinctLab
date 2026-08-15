@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  line-height: 1.55;
+  color: #172033;
+  background: #f5f7fb;
+}
+
+body {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+h1, h2 { color: #102a43; }
+table { width: 100%; border-collapse: collapse; background: white; }
+th, td { padding: 9px 12px; border: 1px solid #d9e2ec; text-align: left; vertical-align: top; }
+th { background: #eaf2f8; }
+code { background: #e8eef5; padding: 1px 5px; border-radius: 4px; }
+.callout { padding: 14px 18px; border-left: 4px solid #2684ff; background: #eaf4ff; }
+.good { color: #147d64; }
+.bad { color: #b42318; }
+@media print { body { padding: 0; } }
