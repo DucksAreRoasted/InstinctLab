@@ -25,6 +25,9 @@ class InstinctRlActorCriticCfg:
     activation: str = MISSING
     """The activation function for the actor and critic networks."""
 
+    mu_activation: str | None = None
+    """Optional activation applied to the deterministic action mean."""
+
 
 @configclass
 class InstinctRlActorCriticRecurrentCfg(InstinctRlActorCriticCfg):

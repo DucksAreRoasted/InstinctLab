@@ -79,10 +79,13 @@ K1_PARKOUR_LINKS = [
 K1_PARKOUR_LINK_SYMMETRY = [0, 1, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10]
 
 # 真机 /boostercamera/head/depth/camera_info 话题的实时标定参数（内参）。
-# 仿真中的射线图像保持较小分辨率（64x36）以保证训练吞吐，而其视场角
-# （aperture）仍与标定后的完整传感器视场一致，即"图像变小、视角不变"。
+# 仿真射线图像的宽度保持 64 以控制训练开销，高度按真机 544:448
+# 纵横比取 53。这避免了原 64x36 非等比光栅将竖直角分辨率降到
+# 2.60 度/像素，使近场的 4 cm 台阶在模糊前就消失。
 K1_DEPTH_WIDTH_PX = 544          # 真机深度传感器全分辨率（像素）
 K1_DEPTH_HEIGHT_PX = 448
+K1_DEPTH_SIM_WIDTH = 64
+K1_DEPTH_SIM_HEIGHT = round(K1_DEPTH_SIM_WIDTH * K1_DEPTH_HEIGHT_PX / K1_DEPTH_WIDTH_PX)
 K1_DEPTH_FOCAL_LENGTH_PX = 210.77337743177728     # 焦距（像素）
 K1_DEPTH_PRINCIPAL_X_PX = 241.36559391021729      # 主点 x（像素，不居中有偏移）
 K1_DEPTH_PRINCIPAL_Y_PX = 217.1773950913373       # 主点 y
@@ -91,6 +94,14 @@ K1_DEPTH_UPDATE_PERIOD_S = 0.05   # 深度相机刷新周期：0.05s = 20 Hz
 # 历史缓冲保存最近 16 帧，观测时每隔 2 帧取 1 帧（见下方 obs 相关注释）。
 K1_DEPTH_HISTORY_LENGTH = 16
 K1_DEPTH_HISTORY_SKIP_FRAMES = 2
+
+# Parkour 局部动作缩放。共享资产里的 .*Head.* 缩放仅为 0.38 rad，
+# 但上楼 AMP 参考的 Head_pitch 平均低头约 32--44 度。拆分 yaw/pitch，
+# 仅让 pitch 覆盖 URDF 的正向上限，使参考动作在策略动作空间中可表达。
+K1_PARKOUR_ACTION_SCALE = copy.deepcopy(K1_ACTION_SCALE)
+K1_HEAD_ACTION_SCALE = K1_PARKOUR_ACTION_SCALE.pop(".*Head.*")
+K1_PARKOUR_ACTION_SCALE["AAHead_yaw"] = K1_HEAD_ACTION_SCALE
+K1_PARKOUR_ACTION_SCALE["Head_pitch"] = 0.855
 # K1 动作参考数据包目录（AMASS-CMU 直接重定向的走、跑和楼梯动作），
 # 可用环境变量覆盖。
 # parents[7]：__file__ 位于 InstinctLab/source/instinctlab/instinctlab/
@@ -214,7 +225,7 @@ class K1ParkourConfigMixin:
         #   clip={".*": (-1.0, 1.0)}：动作值裁剪范围（策略输出通常已过
         #     tanh 天然落在 [-1,1]，此处是双保险）
         self.actions.joint_pos.joint_names = [".*"]
-        self.actions.joint_pos.scale = K1_ACTION_SCALE
+        self.actions.joint_pos.scale = K1_PARKOUR_ACTION_SCALE
         self.actions.joint_pos.clip = {".*": (-1.0, 1.0)}
 
         # 3. 深度相机（模拟真机头部 RGB-D 相机）
@@ -237,17 +248,18 @@ class K1ParkourConfigMixin:
         # 把自己加进求交目标，机器人的手脚就会出现在深度图里（自遮挡），
         # 与真机相机看到的一致，这是 sim2real 深度训练的关键。
         self.scene.camera.mesh_prim_paths = ["/World/ground", *get_link_prim_targets(K1_LINK_NAMES)]
-        # 相机相对 Head_2 的位姿（真机 TF 实测值）：
-        # pos 单位米；rot 是四元数 (x, y, z, w)。
+        # 相机相对 Head_2 的位姿（真机 TF 实测值）。ROS TF 原始
+        # 四元数为 (x, y, z, w)，OffsetCfg.rot 合约为 (w, x, y, z)，
+        # 因此这里必须显式重排；错按 ROS 顺序写入会让光轴略向上看。
         self.scene.camera.offset.pos = (0.05663342989, 0.0462427773, 0.0962657193)
         self.scene.camera.offset.rot = (
+            -0.49015611200872644,
             0.5132977331550982,
             -0.5083061254903114,
             0.4877471740434324,
-            -0.49015611200872644,
         )
         # 位姿约定："ros" = 相机坐标系遵循 ROS 约定（z 朝前、x 朝右、
-        # y 朝下，四元数 x,y,z,w）。G1 版本用 "world"（Isaac 世界系），
+        # y 朝下）。G1 版本用 "world"（Isaac 世界系），
         # K1 因为数据来自 ROS TF 所以必须用 "ros" 解释。
         self.scene.camera.offset.convention = "ros"
         # 用真机标定内参换算仿真相机的视场角与主点偏移。
@@ -265,6 +277,8 @@ class K1ParkourConfigMixin:
         self.scene.camera.pattern_cfg.vertical_aperture_offset = (
             K1_DEPTH_PRINCIPAL_Y_PX - K1_DEPTH_HEIGHT_PX / 2
         ) / K1_DEPTH_FOCAL_LENGTH_PX
+        self.scene.camera.pattern_cfg.width = K1_DEPTH_SIM_WIDTH
+        self.scene.camera.pattern_cfg.height = K1_DEPTH_SIM_HEIGHT
         self.scene.camera.update_period = K1_DEPTH_UPDATE_PERIOD_S
         # history_length 是 isaaclab SensorBaseCfg 字段：保存的历史帧数。
         # 其副作用同样重要：isaaclab 的 SensorBase.update() 中，只要
@@ -276,16 +290,17 @@ class K1ParkourConfigMixin:
         # 字段：dict[操作名, NoiseCfg]。Python 3.8+ 的 dict 保持插入顺序，
         # 噪声操作按顺序依次施加。先取出 G1 配置里已有的管线，
         # 改其中两项后整体放回。
-        # 64x36 的射线图像是对完整传感器的降采样。取其下半部分中央区域，
-        # 得到策略使用的 32x18、聚焦地形的观测图。
+        # 64x53 是对完整传感器的等纵横比降采样。保留中央 32 列和
+        # 中下部 18 行，兼顾直立时的前方台阶与 AMP 低头时的近场落脚点。
+        # 输出仍是 32x18，因此无需改网络输入结构。
         noise_pipeline = self.scene.camera.noise_pipeline
-        # crop_region 是 (上, 下, 左, 右) 四边各裁多少像素：
-        # 上裁 18 行（去掉上半部天空），左右各裁 16 列（保留中央 32 列），
-        # 64x36 变成 (64-32)x(36-18) = 32x18。
-        noise_pipeline["crop_and_resize"].crop_region = (18, 0, 16, 16)
+        # crop_region 是 (上, 下, 左, 右)：53-29-6=18，64-16-16=32。
+        noise_pipeline["crop_and_resize"].crop_region = (29, 6, 16, 16)
+        noise_pipeline["crop_and_resize"].resize_shape = None
+        # G1 的 3x3 模糊不能直接用在这张低分辨率光栅上：4 cm 台阶
+        # 立面只占约 1 个像素，sigma=1 会在标定测距噪声前把它抹平。
         self.scene.camera.noise_pipeline = {
             "crop_and_resize": noise_pipeline["crop_and_resize"],
-            "gaussian_blur": noise_pipeline["gaussian_blur"],
             # RangeBasedGaussianNoiseCfg：在 [min_value, max_value] 深度
             # 区间内叠加标准差为 noise_std 的高斯噪声（模拟真实深度传感器
             # 的测距噪声）。对真机 20 帧静态采样显示：在策略使用的 2.5 m
@@ -363,7 +378,6 @@ class K1ParkourConfigMixin:
         for term_name in ("dof_torques_l2", "energy"):
             getattr(rewards, term_name).params["asset_cfg"].joint_names = [".*_(Hip|Knee|Ankle)_.*"]
         rewards.freeze_upper_body.params["asset_cfg"].joint_names = [
-            ".*Head.*",
             ".*_Shoulder_.*",
             ".*_Elbow_.*",
         ]

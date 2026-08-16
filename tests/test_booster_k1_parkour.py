@@ -15,7 +15,9 @@ except ModuleNotFoundError:
 if _ISAAC_ACTUATORS_SPEC is None:
     pytest.skip("requires pytest to run inside an Isaac Lab AppLauncher process", allow_module_level=True)
 
+from instinctlab.assets.booster_k1 import K1_ACTION_SCALE
 from instinctlab.tasks.parkour.config.g1.g1_parkour_target_amp_cfg import G1ParkourRoughEnvCfg_PLAY
+from instinctlab.tasks.parkour.config.k1.agents.instinct_rl_amp_cfg import K1ParkourPPORunnerCfg
 from instinctlab.tasks.parkour.config.k1.k1_parkour_target_amp_cfg import (
     K1_PARKOUR_LINKS,
     K1AmassMotionCfg,
@@ -52,6 +54,25 @@ def test_k1_hiking_config_uses_full_body_robot_and_gmr_links() -> None:
     assert cfg.scene.motion_reference.prim_path.endswith("/Robot/Trunk")
     assert cfg.scene.motion_reference.link_of_interests == K1_PARKOUR_LINKS
     assert cfg.scene.motion_reference.symmetric_augmentation_link_mapping == [0, 1, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10]
+
+
+def test_k1_parkour_can_reproduce_amp_stair_ascent_head_pitch() -> None:
+    cfg = K1ParkourEnvCfg_PLAY()
+    action_scale = cfg.actions.joint_pos.scale
+    frozen_joints = cfg.rewards.rewards.freeze_upper_body.params["asset_cfg"].joint_names
+
+    # The stair-ascent references look down by roughly 32--44 degrees.  The
+    # parkour action must be able to reach the positive Head_pitch URDF limit.
+    assert action_scale["Head_pitch"] == pytest.approx(0.855)
+    assert action_scale["AAHead_yaw"] == pytest.approx(K1_ACTION_SCALE[".*Head.*"])
+    assert ".*Head.*" not in action_scale
+    assert all("Head" not in joint_pattern for joint_pattern in frozen_joints)
+
+
+def test_k1_parkour_inference_actions_are_bounded_before_environment_clipping() -> None:
+    cfg = K1ParkourPPORunnerCfg()
+
+    assert cfg.policy.mu_activation == "tanh"
 
 
 def test_k1_play_scene_is_small_enough_for_checkpoint_inspection() -> None:
@@ -108,10 +129,10 @@ def test_k1_hiking_config_adapts_perception_and_safety_geometry() -> None:
     )
     assert cfg.scene.camera.offset.rot == pytest.approx(
         (
+            -0.49015611200872644,
             0.5132977331550982,
             -0.5083061254903114,
             0.4877471740434324,
-            -0.49015611200872644,
         )
     )
     assert cfg.scene.camera.offset.convention == "ros"
@@ -133,10 +154,11 @@ def test_k1_depth_observation_matches_the_real_camera_sampling_contract() -> Non
     assert cfg.scene.camera.pattern_cfg.horizontal_aperture_offset == pytest.approx(-0.14534286285609482)
     assert cfg.scene.camera.pattern_cfg.vertical_aperture_offset == pytest.approx(-0.03236938645570181)
     assert cfg.scene.camera.pattern_cfg.width == 64
-    assert cfg.scene.camera.pattern_cfg.height == 36
+    assert cfg.scene.camera.pattern_cfg.height == 53
     assert cfg.scene.camera.update_period == pytest.approx(0.05)
     assert cfg.scene.camera.history_length == 1
-    assert cfg.scene.camera.noise_pipeline["crop_and_resize"].crop_region == (18, 0, 16, 16)
+    assert cfg.scene.camera.noise_pipeline["crop_and_resize"].crop_region == (29, 6, 16, 16)
+    assert cfg.scene.camera.noise_pipeline["crop_and_resize"].resize_shape is None
     assert cfg.scene.camera.data_histories["distance_to_image_plane_noised"] == 16
     assert cfg.observations.policy.depth_image.params["history_skip_frames"] == 2
     assert cfg.observations.critic.depth_image.params["history_skip_frames"] == 2
@@ -147,7 +169,7 @@ def test_k1_depth_noise_matches_observed_real_camera_variation() -> None:
     cfg = K1ParkourEnvCfg_PLAY()
 
     pipeline = cfg.scene.camera.noise_pipeline
-    assert list(pipeline) == ["crop_and_resize", "gaussian_blur", "sensor_noise", "depth_normalization"]
+    assert list(pipeline) == ["crop_and_resize", "sensor_noise", "depth_normalization"]
     assert pipeline["sensor_noise"].min_value == pytest.approx(0.1)
     assert pipeline["sensor_noise"].max_value == pytest.approx(2.5)
     assert pipeline["sensor_noise"].noise_std == pytest.approx(0.02)
