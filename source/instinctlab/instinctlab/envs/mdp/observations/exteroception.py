@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import torch
 from typing import TYPE_CHECKING, Literal
-import os
 
 import cv2
 
@@ -18,6 +19,10 @@ if TYPE_CHECKING:
     from isaaclab.sensors import Camera, RayCasterCamera, TiledCamera
 
     from instinctlab.sensors import GroupedRayCasterCamera, NoisyGroupedRayCasterCamera
+
+
+_DEBUG_VIS_FRAME_COUNTS: dict[str, int] = {}
+_CV2_GUI_AVAILABLE: bool | None = None
 
 
 def _debug_visualize_image(
@@ -43,12 +48,28 @@ def _debug_visualize_image(
     # Isaac Sim is often run in a headless container with opencv-python-headless.
     # Keep visualization useful there by writing the latest processed frame to disk.
     save_path = os.environ.get("INSTINCT_DEPTH_VIS_PATH", "/tmp/instinct_depth_vis.png")
-    try:
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.imshow(window_name, img)
-        cv2.waitKey(1)
-    except cv2.error:
-        cv2.imwrite(save_path, img)
+    save_interval = max(int(os.environ.get("INSTINCT_DEPTH_VIS_INTERVAL", "250")), 1)
+    save_dir = os.path.dirname(save_path)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+
+    global _CV2_GUI_AVAILABLE
+    if _CV2_GUI_AVAILABLE is not False:
+        try:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.imshow(window_name, img)
+            cv2.waitKey(1)
+            _CV2_GUI_AVAILABLE = True
+        except cv2.error:
+            _CV2_GUI_AVAILABLE = False
+
+    frame_count = _DEBUG_VIS_FRAME_COUNTS.get(window_name, 0)
+    _DEBUG_VIS_FRAME_COUNTS[window_name] = frame_count + 1
+    cv2.imwrite(save_path, img)
+    if frame_count % save_interval == 0:
+        path_root, path_ext = os.path.splitext(save_path)
+        snapshot_path = f"{path_root}_{frame_count:06d}{path_ext or '.png'}"
+        cv2.imwrite(snapshot_path, img)
 
 
 def visualizable_image(
