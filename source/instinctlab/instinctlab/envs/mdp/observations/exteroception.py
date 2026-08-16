@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 from typing import TYPE_CHECKING, Literal
+import os
 
 import cv2
 
@@ -39,9 +40,15 @@ def _debug_visualize_image(
     img = (image * 255.0 / image.max()).cpu().numpy().astype("uint8")  # (H, W)
     # Scale up the image for better visualization
     img = cv2.resize(img, (img.shape[1] * scale_up_vis, img.shape[0] * scale_up_vis), interpolation=cv2.INTER_AREA)
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, img)
-    cv2.waitKey(1)
+    # Isaac Sim is often run in a headless container with opencv-python-headless.
+    # Keep visualization useful there by writing the latest processed frame to disk.
+    save_path = os.environ.get("INSTINCT_DEPTH_VIS_PATH", "/tmp/instinct_depth_vis.png")
+    try:
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.imshow(window_name, img)
+        cv2.waitKey(1)
+    except cv2.error:
+        cv2.imwrite(save_path, img)
 
 
 def visualizable_image(
