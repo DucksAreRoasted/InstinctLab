@@ -73,6 +73,7 @@ def test_k1_parkour_inference_actions_are_bounded_before_environment_clipping() 
     cfg = K1ParkourPPORunnerCfg()
 
     assert cfg.policy.mu_activation == "tanh"
+    assert cfg.save_interval == 2500
 
 
 def test_k1_play_scene_is_small_enough_for_checkpoint_inspection() -> None:

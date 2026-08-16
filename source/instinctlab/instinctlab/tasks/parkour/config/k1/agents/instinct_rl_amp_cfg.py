@@ -21,3 +21,4 @@ class K1ParkourPPORunnerCfg(G1ParkourPPORunnerCfg):
 
     experiment_name = "k1_parkour"
     policy = K1MoEPolicyCfg()
+    save_interval = 2500
