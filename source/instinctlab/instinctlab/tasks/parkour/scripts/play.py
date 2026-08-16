@@ -34,6 +34,12 @@ parser.add_argument("--agent_cfg", action="store_true", default=False, help="Loa
 parser.add_argument("--sample", action="store_true", default=False, help="Sample actions instead of using the policy.")
 parser.add_argument("--zero_act_until", type=int, default=0, help="Zero actions until this timestep.")
 parser.add_argument("--keyboard_control", action="store_true", default=False, help="Enable keyboard control.")
+parser.add_argument(
+    "--depth_vis",
+    action="store_true",
+    default=False,
+    help="Show the processed depth frames that are fed to the policy in an OpenCV window.",
+)
 parser.add_argument("--keyboard_linvel_step", type=float, default=0.5, help="Linear velocity change per keyboard step.")
 parser.add_argument("--keyboard_angvel", type=float, default=1.0, help="Angular velocity set by keyboard.")
 parser.add_argument(
@@ -139,6 +145,11 @@ def main():
         agent_cfg_dict = load_yaml(os.path.join(log_dir, "params", "agent.yaml"))
     else:
         agent_cfg_dict = agent_cfg.to_dict()
+
+    if args_cli.depth_vis:
+        # This is the post-processed observation path used by the policy, including
+        # crop, normalization, noise, delay, and frame history selection.
+        env_cfg.observations.policy.depth_image.params["debug_vis"] = True
 
     if args_cli.keyboard_control:
         env_cfg.scene.num_envs = 1
